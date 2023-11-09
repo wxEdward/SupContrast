@@ -4,12 +4,18 @@ import math
 import numpy as np
 import torch
 import torch.optim as optim
+from losses import SupConLoss
+from attack.fgsm.fgsm import RepresentationAdv
 
 
 class TwoCropTransform:
     """Create two crops of the same image"""
-    def __init__(self, transform):
+    def __init__(self, transform, temperature):
         self.transform = transform
+        self.criterion = SupConLoss(temperature)
+        self.rocl = RepresentationAdv(model, projector, epsilon=args.epsilon, alpha=args.alpha, min_val=args.min,
+                                      max_val=args.max, max_iters=args.k, _type=args.attack_type,
+                                      loss_type=args.loss_type, regularize = args.regularize_to)
 
     def __call__(self, x):
         return [self.transform(x), self.transform(x)]

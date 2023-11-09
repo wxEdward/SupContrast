@@ -16,6 +16,7 @@ from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model
 from networks.resnet_big import SupConResNet
 from losses import SupConLoss
+from torch.utils.data import DataLoader
 
 try:
     import apex
@@ -82,8 +83,8 @@ def parse_option():
     # check if dataset is path that passed required arguments
     if opt.dataset == 'path':
         assert opt.data_folder is not None \
-            and opt.mean is not None \
-            and opt.std is not None
+               and opt.mean is not None \
+               and opt.std is not None
 
     # set the path according to the environment
     if opt.data_folder is None:
@@ -96,7 +97,7 @@ def parse_option():
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = '{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'.\
+    opt.model_name = '{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'. \
         format(opt.method, opt.dataset, opt.model, opt.learning_rate,
                opt.weight_decay, opt.batch_size, opt.temp, opt.trial)
 
@@ -127,6 +128,87 @@ def parse_option():
 
     return opt
 
+
+def set_loader(opt, device):
+    import scipy.io
+    # train_data = scipy.io.loadmat('./binversion/train.mat')
+    # test_data = scipy.io.loadmat('./binversion/test.mat')
+
+    train_data = scipy.io.loadmat('/data/tian/MSTAR/mat/train88.mat')
+    test_data = scipy.io.loadmat('/data/tian/MSTAR/mat/test88.mat')
+
+    # train_data = scipy.io.loadmat('/data/tian/MSTAR/dataset88/train88.mat')
+    # test_data = scipy.io.loadmat('/data/tian/MSTAR/dataset88/test88.mat')
+
+    X_train, y_train = np.array(train_data['train_data']), np.array(train_data['train_label'])
+    X_test, y_test = np.array(test_data['test_data']), np.array(test_data['test_label'])
+
+    y_train = y_train.squeeze()
+    y_test = y_test.squeeze()
+
+    X_train_image = X_train
+    X_test_image = X_test
+
+    X_train_image = (X_train_image - X_train_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_train_image.ptp(
+        axis=(1, 2)).reshape([-1, 1, 1])
+    print(np.min(X_train_image), np.max(X_train_image))
+    X_train_image = X_train_image[:, np.newaxis, :, :]
+    X_train_image = torch.from_numpy(X_train_image).to(device)
+    X_train_image = X_train_image.type(torch.float32)
+
+    X_test_image = (X_test_image - X_test_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_test_image.ptp(
+        axis=(1, 2)).reshape([-1, 1, 1])
+    print(np.min(X_test_image), np.max(X_test_image))
+    X_test_image = X_test_image[:, np.newaxis, :, :]
+    X_test_image = torch.from_numpy(X_test_image).to(device)
+    X_test_image = X_test_image.type(torch.float32)
+
+    if y_train.min().item == 1 and y_train.max().item() == 10:
+        train_label = torch.from_numpy(y_train).to(device) - 1
+    else:
+        train_label = torch.from_numpy(y_train).to(device)
+    train_label = train_label.type(torch.int64)
+
+    if y_test.min().item == 1 and y_test.max().item() == 10:
+        test_label = torch.from_numpy(y_test).to(device) - 1
+    else:
+        test_label = torch.from_numpy(y_test).to(device)
+    test_label = test_label.type(torch.int64)
+
+    # y_attack_target = np.ones(y_test.shape)
+    # y_attack_target = np.where(y_test != y_attack_target, y_attack_target, y_attack_target+1)
+    # test_attack_target = torch.from_numpy(y_attack_target).to(device) - 1
+    # test_attack_target = test_attack_target.type(torch.int64)
+
+    print(X_train_image.size(), train_label.size())
+
+    train_data = [[X_train_image[i], train_label[i]] for i in range(train_label.size()[0])]
+    test_data = [[X_test_image[i], test_label[i]] for i in range(test_label.size()[0])]
+
+    #normalize = transforms.Normalize(mean=mean, std=std)
+
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(size=opt.size, scale=(0.2, 1.)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomApply([
+            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
+        ], p=0.8),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.ToTensor(),
+        #normalize,
+    ])
+
+    train_dataloader = DataLoader(train_data, transform=TwoCropTransform(train_transform, opt.temperature), batch_size=opt.batch_size,
+                                  shuffle=True)
+    test_dataloader = DataLoader(test_data, transform=TwoCropTransform(train_transform, opt.temperature), batch_size=opt.batch_size,
+                                 shuffle=False)
+
+    return train_dataloader, test_dataloader
+
+    # return X_train_image, X_test_image, train_label, test_label #, test_attack_target
+
+
+'''
 
 def set_loader(opt):
     # construct data loader
@@ -174,6 +256,7 @@ def set_loader(opt):
         num_workers=opt.num_workers, pin_memory=True, sampler=train_sampler)
 
     return train_loader
+'''
 
 
 def set_model(opt):
@@ -245,8 +328,8 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
                   'BT {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'DT {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'loss {loss.val:.3f} ({loss.avg:.3f})'.format(
-                   epoch, idx + 1, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses))
+                epoch, idx + 1, len(train_loader), batch_time=batch_time,
+                data_time=data_time, loss=losses))
             sys.stdout.flush()
 
     return losses.avg
@@ -255,8 +338,10 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
 def main():
     opt = parse_option()
 
+    device = torch.device("cuda")
+
     # build data loader
-    train_loader = set_loader(opt)
+    train_loader, _ = set_loader(opt, device)
 
     # build model and criterion
     model, criterion = set_model(opt)
