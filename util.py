@@ -2,24 +2,28 @@ from __future__ import print_function
 
 import math
 import numpy as np
+from scipy.io import loadmat
 import torch
 import torch.optim as optim
-from losses import SupConLoss
-from attack.fgsm.fgsm import RepresentationAdv
+from attacks.fgsm import RepresentationAdv
+from attacks.otsa import OTSA
 
 
 class TwoCropTransform:
     """Create two crops of the same image"""
-    def __init__(self, transform, temperature):
+    def __init__(self, transform, temperature, model, args):
         self.transform = transform
-        self.criterion = SupConLoss(temperature)
-        self.rocl = RepresentationAdv(model, projector, epsilon=args.epsilon, alpha=args.alpha, min_val=args.min,
-                                      max_val=args.max, max_iters=args.k, _type=args.attack_type,
-                                      loss_type=args.loss_type, regularize = args.regularize_to)
+        self.model = model
+        self.attack_1 = RepresentationAdv(model, projector, epsilon=args.epsilon, alpha=args.alpha, min_val=args.min, max_val=args.max, max_iters=args.k, _type=args.attack_type, loss_type=args.loss_type, regularize = args.regularize_to)
+        self.attack_2 = OTSA()
 
-    def __call__(self, x):
-        return [self.transform(x), self.transform(x)]
-
+    def __call__(self, x, y, overlays):
+        augmented_x1 = self.transform(x)
+        augmented_x2 = self.transform(x)
+        adv_1, _ = self.attack_1.get_loss(original_images=augmented_x1, target = attack_target, optimizer=optimizer, weight= args.lamda, random_start=args.random_start)
+        adv_2 = self.attack_2.generate(self.model, x, y, overlays)
+        return [adv_1, adv_2]
+ 
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -99,3 +103,32 @@ def save_model(model, optimizer, opt, epoch, save_file):
     }
     torch.save(state, save_file)
     del state
+
+
+def load_train_images(device):
+
+    data = loadmat('MSTAR/mat/train88.mat')
+    masks = np.load("MSTAR/mat/train88_masks.npy")
+
+    imgs = data['train_data']
+    labels = data['train_label']
+
+    imgs = torch.from_numpy(imgs).to(device)
+    labels = torch.from_numpy(labels).to(device)
+    masks = torch.from_numpy(masks).to(device)
+
+    return imgs, labels, masks
+
+def load_test_images(device):
+
+    data = loadmat('MSTAR/mat/test88.mat')
+    masks = np.load("MSTAR/mat/test88_masks.npy")
+
+    imgs = data['test_data']
+    labels = data['test_label']
+
+    imgs = torch.from_numpy(imgs).to(device)
+    labels = torch.from_numpy(labels).to(device)
+    masks = torch.from_numpy(masks).to(device)
+
+    return imgs, labels, masks

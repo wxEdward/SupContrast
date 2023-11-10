@@ -5,6 +5,7 @@ import sys
 import argparse
 import time
 import math
+import numpy as np
 
 import tensorboard_logger as tb_logger
 import torch
@@ -129,7 +130,7 @@ def parse_option():
     return opt
 
 
-def set_loader(opt, device):
+def set_loader(opt, model, device):
     import scipy.io
     # train_data = scipy.io.loadmat('./binversion/train.mat')
     # test_data = scipy.io.loadmat('./binversion/test.mat')
@@ -198,9 +199,9 @@ def set_loader(opt, device):
         #normalize,
     ])
 
-    train_dataloader = DataLoader(train_data, transform=TwoCropTransform(train_transform, opt.temperature), batch_size=opt.batch_size,
+    train_dataloader = DataLoader(train_data, transform=TwoCropTransform(train_transform, opt.temperature, model), batch_size=opt.batch_size,
                                   shuffle=True)
-    test_dataloader = DataLoader(test_data, transform=TwoCropTransform(train_transform, opt.temperature), batch_size=opt.batch_size,
+    test_dataloader = DataLoader(test_data, transform=TwoCropTransform(train_transform, opt.temperature, model), batch_size=opt.batch_size,
                                  shuffle=False)
 
     return train_dataloader, test_dataloader
@@ -340,11 +341,13 @@ def main():
 
     device = torch.device("cuda")
 
-    # build data loader
-    train_loader, _ = set_loader(opt, device)
-
+    
     # build model and criterion
     model, criterion = set_model(opt)
+
+    # build data loader
+    train_loader, _ = set_loader(opt, model, device)
+
 
     # build optimizer
     optimizer = set_optimizer(opt, model)

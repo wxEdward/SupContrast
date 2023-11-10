@@ -84,3 +84,19 @@ def load_test_images(device):
     print(X_test.size(), y_test.size(), len(n_test.keys()), mag_test.shape)
 
     return X_test, y_test, n_test, mag_test
+
+def load_train_images(device):
+    
+    from scipy.io import loadmat
+
+    data = loadmat('MSTAR/mat/train88.mat')
+    masks = np.load("MSTAR/mat/train88_masks.npy")
+
+    imgs = data['train_data']
+    labels = data['train_label']
+
+    imgs = torch.from_numpy(imgs).to(device)
+    labels = torch.from_numpy(labels).to(device)
+    masks = torch.from_numpy(masks).to(device)
+
+    return imgs, labels, masks
