@@ -7,20 +7,29 @@ import torch
 import torch.optim as optim
 from attacks.fgsm import RepresentationAdv
 from attacks.otsa import OTSA
+from torchlars import LARS
 
 
 class TwoCropTransform:
     """Create two crops of the same image"""
-    def __init__(self, transform, temperature, model, args):
+    def __init__(self, transform, model, args):
         self.transform = transform
         self.model = model
-        self.attack_1 = RepresentationAdv(model, projector, epsilon=args.epsilon, alpha=args.alpha, min_val=args.min, max_val=args.max, max_iters=args.k, _type=args.attack_type, loss_type=args.loss_type, regularize = args.regularize_to)
-        self.attack_2 = OTSA()
+        self.attack_1 = RepresentationAdv(model, epsilon=args.epsilon, alpha=args.alpha, min_val=args.min, max_val=args.max,
+                                          max_iters=args.k, _type=args.attack_type, loss_type=args.loss_type,
+                                          regularize = args.regularize_to)
+        self.attack_2 = OTSA(args.temperture)
+
+        model_params = []
+        model_params += model.parameters()
+        base_optimizer = optim.SGD(model_params, lr=args.lr, momentum=0.9, weight_decay=args.decay)
+        self.optimizer = LARS(optimizer=base_optimizer, eps=1e-8, trust_coef=0.001)
 
     def __call__(self, x, y, overlays):
         augmented_x1 = self.transform(x)
         augmented_x2 = self.transform(x)
-        adv_1, _ = self.attack_1.get_loss(original_images=augmented_x1, target = attack_target, optimizer=optimizer, weight= args.lamda, random_start=args.random_start)
+        adv_1, _ = self.attack_1.get_loss(original_images=augmented_x1, target = augmented_x2, optimizer=self.optimizer,
+                                          weight=256, random_start=True)
         adv_2 = self.attack_2.generate(self.model, x, y, overlays)
         return [adv_1, adv_2]
  

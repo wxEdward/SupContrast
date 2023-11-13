@@ -28,6 +28,13 @@ class AConvNet(nn.Module):
             nn.Dropout(p=dropout),
             nn.Conv2d(128, 10, kernel_size=3, stride=3)
         )
+
+        self.head = nn.Sequential(
+            nn.Linear(128, 256),
+            nn.ReLU(inplace=True),
+            nn.Linear(256, 128)
+        )
+
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

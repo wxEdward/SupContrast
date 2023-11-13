@@ -16,11 +16,10 @@ def project(x, original_x, epsilon, _type='linf'):
 
 class RepresentationAdv():
 
-    def __init__(self, model, projector, epsilon, alpha, min_val, max_val, max_iters,  _type='linf', loss_type='sim', regularize='original'):
+    def __init__(self, model, epsilon, alpha, min_val, max_val, max_iters=7,  _type='linf', loss_type='sim', regularize='original'):
 
         # Model
         self.model = model
-        self.projector = projector
         self.regularize = regularize
         # Maximum perturbation
         self.epsilon = epsilon
@@ -38,7 +37,8 @@ class RepresentationAdv():
         self.loss_type = loss_type
 
 
-    def get_loss(self, original_images, target, optimizer, weight, random_start=True):
+    def get_loss(self, original_images, target, weight, random_start=True):
+
         if random_start:
             rand_perturb = torch.FloatTensor(original_images.shape).uniform_(
                 -self.epsilon, self.epsilon)
@@ -50,27 +50,27 @@ class RepresentationAdv():
 
         x.requires_grad = True
         
-        self.model.eval()
-        self.projector.eval()
+        self.model.encoder.eval()
+        self.model.head.eval()
         batch_size = len(x)
         
         with torch.enable_grad():
             for _iter in range(self.max_iters):
 
-                self.model.zero_grad()
-                self.projector.zero_grad()
+                self.model.encoder.zero_grad()
+                self.model.head.zero_grad()
 
                 if self.loss_type == 'mse':
-                    loss = F.mse_loss(self.projector(self.model(x)),self.projector(self.model(target)))
+                    loss = F.mse_loss(self.model(x),self.model(target))
                 elif self.loss_type == 'sim':
                     inputs = torch.cat((x, target))
-                    output = self.projector(self.model(inputs))
+                    output = self.model(inputs)
                     similarity,_  = pairwise_similarity(output, temperature=0.5, multi_gpu=False, adv_type = 'None') 
                     loss  = NT_xent(similarity, 'None')
                 elif self.loss_type == 'l1':
-                    loss = F.l1_loss(self.projector(self.model(x)), self.projector(self.model(target)))
+                    loss = F.l1_loss(self.model(x), self.model(target))
                 elif self.loss_type =='cos':
-                    loss = 1-F.cosine_similarity(self.projector(self.model(x)), self.projector(self.model(target))).mean()
+                    loss = 1-F.cosine_similarity(self.model(x), self.model(target)).mean()
 
                 grads = torch.autograd.grad(loss, x, grad_outputs=None, only_inputs=True, retain_graph=False)[0]
 
@@ -82,23 +82,23 @@ class RepresentationAdv():
                 x = torch.clamp(x,self.min_val,self.max_val)
                 x = project(x, original_images, self.epsilon, self._type)
 
-        self.model.train()
-        self.projector.train()
+        self.model.encoder.train()
+        self.model.head.train()
         optimizer.zero_grad()
 
         if self.loss_type == 'mse':
-            loss = F.mse_loss(self.projector(self.model(x)),self.projector(self.model(target))) * (1.0/batch_size)
+            loss = F.mse_loss(self.model(x),self.model(target)) * (1.0/batch_size)
         elif self.loss_type == 'sim':
             if self.regularize== 'original':
                 inputs = torch.cat((x, original_images))
             else:
                 inputs = torch.cat((x, target))
-            output = self.projector(self.model(inputs))
+            output = self.model(inputs)
             similarity, _  = pairwise_similarity(output, temperature=0.5, multi_gpu=False, adv_type = 'None')
             loss  = (1.0/weight) * NT_xent(similarity, 'None')  
         elif self.loss_type == 'l1':
-            loss = F.l1_loss(self.projector(self.model(x)), self.projector(self.model(target))) * (1.0/batch_size)
+            loss = F.l1_loss(self.model(x), self.model(target)) * (1.0/batch_size)
         elif self.loss_type == 'cos':
-            loss = 1-F.cosine_similarity(self.projector(self.model(x)), self.projector(self.model(target))).sum() * (1.0/batch_size)
+            loss = 1-F.cosine_similarity(self.model(x), self.model(target)).sum() * (1.0/batch_size)
 
         return x.detach(), loss

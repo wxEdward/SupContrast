@@ -18,6 +18,7 @@ from util import set_optimizer, save_model
 from networks.resnet_big import SupConResNet
 from losses import SupConLoss
 from torch.utils.data import DataLoader
+from util import load_train_images, load_test_images
 
 try:
     import apex
@@ -135,14 +136,14 @@ def set_loader(opt, model, device):
     # train_data = scipy.io.loadmat('./binversion/train.mat')
     # test_data = scipy.io.loadmat('./binversion/test.mat')
 
-    train_data = scipy.io.loadmat('/data/tian/MSTAR/mat/train88.mat')
-    test_data = scipy.io.loadmat('/data/tian/MSTAR/mat/test88.mat')
+    # train_data = scipy.io.loadmat('/data/MSTAR/mat/train88.mat')
+    # test_data = scipy.io.loadmat('/data/MSTAR/mat/test88.mat')
 
     # train_data = scipy.io.loadmat('/data/tian/MSTAR/dataset88/train88.mat')
     # test_data = scipy.io.loadmat('/data/tian/MSTAR/dataset88/test88.mat')
 
-    X_train, y_train = np.array(train_data['train_data']), np.array(train_data['train_label'])
-    X_test, y_test = np.array(test_data['test_data']), np.array(test_data['test_label'])
+    X_train, y_train, musk_train = load_train_images(device)
+    X_test, y_test, musk_test = load_test_images(device)
 
     y_train = y_train.squeeze()
     y_test = y_test.squeeze()
@@ -183,11 +184,6 @@ def set_loader(opt, model, device):
 
     print(X_train_image.size(), train_label.size())
 
-    train_data = [[X_train_image[i], train_label[i]] for i in range(train_label.size()[0])]
-    test_data = [[X_test_image[i], test_label[i]] for i in range(test_label.size()[0])]
-
-    #normalize = transforms.Normalize(mean=mean, std=std)
-
     train_transform = transforms.Compose([
         transforms.RandomResizedCrop(size=opt.size, scale=(0.2, 1.)),
         transforms.RandomHorizontalFlip(),
@@ -199,9 +195,18 @@ def set_loader(opt, model, device):
         #normalize,
     ])
 
-    train_dataloader = DataLoader(train_data, transform=TwoCropTransform(train_transform, opt.temperature, model), batch_size=opt.batch_size,
+    augment = TwoCropTransform(train_transform, model, opt)
+    X_train_augmented = augment(X_train_image, train_label, musk_train)
+    X_test_augmented = augment(X_test_image,test_label, musk_test)
+
+    train_data = [[X_train_augmented[i], train_label[i]] for i in range(train_label.size()[0])]
+    test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
+
+    #normalize = transforms.Normalize(mean=mean, std=std)
+
+    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,
                                   shuffle=True)
-    test_dataloader = DataLoader(test_data, transform=TwoCropTransform(train_transform, opt.temperature, model), batch_size=opt.batch_size,
+    test_dataloader = DataLoader(test_data, batch_size=opt.batch_size,
                                  shuffle=False)
 
     return train_dataloader, test_dataloader

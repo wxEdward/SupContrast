@@ -4,6 +4,7 @@ from torch.fft import ifft2 as ifft2
 import torch.nn.functional as F
 
 from scatter_batch import E_i, E, getImage
+from losses import SupConLoss
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #device = "cpu"
@@ -32,8 +33,9 @@ mode
 7: alpha=-0.5, gamma=0
 '''
 class OTSA():
-    def __init__(self) -> None:
+    def __init__(self, temerature) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.criterion = SupConLoss(temperature=temerature)
 
     def initParam(self, batch, N, theta_min, theta_max, notation, device):
         mode = np.random.randint(0, 8, size=(batch, N))
