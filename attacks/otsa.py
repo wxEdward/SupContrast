@@ -109,7 +109,7 @@ class OTSA():
     @param n_max: max iterations
     @param S0: initial mean stepsize (e.g., [0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])
     '''
-    def attack(self, model, device, X_image, y_gt, notation, overlay, batch, N, theta_min, theta_max, vth, lambd, lambd_gaussian, n_max, S0):
+    def attack(self, model, criterion, device, X_image, y_gt, notation, overlay, batch, N, theta_min, theta_max, vth, lambd, lambd_gaussian, n_max, S0):
         '''
         assert(mag.shape == (2, ))
         print(mag[0], mag[1])
@@ -147,7 +147,7 @@ class OTSA():
         min_param = param[v.argmin()]
         
         y_gt_batch = y_gt.repeat(batch)
-        loss_pred = F.nll_loss(output, y_gt_batch, reduction='none') 
+        loss_pred = criterion(output, y_gt_batch) 
         loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
         loss = loss_pred + loss_gaussian
         total_loss = torch.sum(loss)  # prepare to backward for the entire batch
@@ -194,7 +194,7 @@ class OTSA():
             output = model(X_adv)
 
             # Since not all param are updated, we compute the loss again to make sure the loss is aligned with the param
-            loss_pred = F.nll_loss(output, y_gt_batch, reduction='none') 
+            loss_pred = criterion(output, y_gt_batch) 
             loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
             loss = loss_pred + loss_gaussian
             total_loss = torch.sum(loss)
@@ -260,7 +260,7 @@ class OTSA():
         img = (img - min_pixel) / (max_pixel - min_pixel)
         return img
 
-    def generate(self, model, X_image, y_gt, overlays, batch=100, N=3, theta_min=np.array([0, 0, 0, -1, 0, 0, -1]), theta_max=np.array([10, 87, 87, 1, 2, 5, 1]), 
+    def generate(self, model, criterion,X_image, y_gt, overlays, batch=100, N=3, theta_min=np.array([0, 0, 0, -1, 0, 0, -1]), theta_max=np.array([10, 87, 87, 1, 2, 5, 1]), 
                  vth=0.1, lambd=0.5, lambd_gaussian=1000, n_max=90, S0=np.array([0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])):
         #S0 = np.array([0.05, 0.1, 0.1, 0, 0.01, 0.025, 0.01])
 
@@ -282,7 +282,7 @@ class OTSA():
             progress += 1
             print("Progress: {}/{}".format(progress, X_image.size()[0]))
 
-            output_clear = surrogate_model(image[None,None,:,:])
+            output_clear = surrogate_model(image[None,:,:])
             _, predicted_clear = torch.max(output_clear.data, 1)
             if predicted_clear.item() != label.item():
                 # was wrong prediction before attacking
@@ -291,7 +291,7 @@ class OTSA():
             gt.append(label.cpu().detach().numpy())
             
             notation = np.argwhere(overlays[i]==1)
-            param = self.attack(surrogate_model, image, label, notation, overlays[i], batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
+            param = self.attack(surrogate_model,criterion, image, label, notation, overlays[i], batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
 
             # filter out any scatter if its [x,y] is not on the object
             # allow scatters if partially out of object but with centroid on the object

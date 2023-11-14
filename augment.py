@@ -112,7 +112,7 @@ if __name__ == '__main__':
 
     attack_2 = OTSA(0.07)
 
-    adv_2, adv_2_filtered = attack_2.generate(model, X_train_augmented, y_train, musk_train)
+    adv_2, adv_2_filtered = attack_2.generate(model,criterion, X_train_augmented, y_train, musk_train)
     print(len(adv_2), len(adv_2_filtered))
 
 
