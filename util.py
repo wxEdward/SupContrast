@@ -122,11 +122,12 @@ def load_train_images(device):
     imgs = data['train_data']
     labels = data['train_label']
 
-    imgs = torch.from_numpy(imgs).to(device)
-    labels = torch.from_numpy(labels).to(device)
+    # imgs = torch.from_numpy(imgs).to(device)
+    # labels = torch.from_numpy(labels).to(device)
     masks = torch.from_numpy(masks).to(device)
 
     return imgs, labels, masks
+
 
 def load_test_images(device):
 
@@ -136,8 +137,8 @@ def load_test_images(device):
     imgs = data['test_data']
     labels = data['test_label']
 
-    imgs = torch.from_numpy(imgs).to(device)
-    labels = torch.from_numpy(labels).to(device)
+    # imgs = torch.from_numpy(imgs).to(device)
+    # labels = torch.from_numpy(labels).to(device)
     masks = torch.from_numpy(masks).to(device)
 
     return imgs, labels, masks

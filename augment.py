@@ -1,34 +1,20 @@
 from torchvision import transforms
-
 import torch
-import sys, os
-directory = os.path.dirname(os.path.abspath("__file__"))
-# setting path
-sys.path.append(os.path.dirname(os.path.dirname(directory)))
 import numpy as np
 from scipy.io import loadmat
-#import main_supcon
-
-def load_train_images(device):
-
-    data = loadmat('MSTAR/mat/train88.mat')
-    masks = np.load("MSTAR/mat/train88_masks.npy")
-
-    imgs = data['train_data']
-    labels = data['train_label']
-
-    #imgs = torch.from_numpy(imgs).to(device)
-    #labels = torch.from_numpy(labels).to(device)
-    #masks = torch.from_numpy(masks).to(device)
-
-    return imgs, labels, masks
+# from main_supcon import set_model
+from attacks.otsa import OTSA
+from util import load_train_images, load_test_images
+import torch.backends.cudnn as cudnn
+from networks.resnet_big import SupConResNet
+from losses import SupConLoss
+# from otsa import OTSA
 
 
 class Augmentation():
     def __init__(self) -> None:
         
         #normalize = transforms.Normalize(mean=mean, std=std)
-
 
         self. train_transform = transforms.Compose([
         transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
@@ -37,20 +23,16 @@ class Augmentation():
             transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
         ], p=0.8),
         transforms.RandomGrayscale(p=0.2),
-        #transforms.ToTensor(),
-        #normalize,
+        # transforms.ToTensor(),
+        # normalize,
         ])
 
-    
     def __call__(self, x):
         return self.train_transform(x)
     
-import torch.backends.cudnn as cudnn
-from networks.resnet_big import SupConResNet
-from losses import SupConLoss
-from otsa import OTSA
 
-def set_model():
+def set_augment_model():
+
     model = SupConResNet(name='resnet50')
     criterion = SupConLoss(temperature=0.07)
 
@@ -126,8 +108,10 @@ if __name__ == '__main__':
     #return train_dataloader, test_dataloader
     print(len(train_data))
     
-    model = main_supcon.set_model
+    model, criterion = set_augment_model()
+
     attack_2 = OTSA(0.07)
+
     adv_2, adv_2_filtered = attack_2.generate(model, X_train_augmented, y_train, musk_train)
     print(len(adv_2), len(adv_2_filtered))
 
