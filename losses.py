@@ -189,3 +189,7 @@ def NT_xent(similarity_matrix, adv_type):
             + torch.diag(NT_xent_loss[N:2 * N, 2 * N:]) + torch.diag(NT_xent_loss[2 * N:, N:2 * N]))
     return NT_xent_loss_total
 
+
+if __name__ =='__main__':
+    a = torch.tensor([[0.1,0.2], [0.2, 0.3]])
+    print(pairwise_similarity(a))

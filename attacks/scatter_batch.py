@@ -11,7 +11,7 @@ import torch_geometric
 from matplotlib.image import imsave
 from time import time
 
-from util import load_images, setup_model
+#from util import load_images, setup_model
 
 
 #torch.cuda.is_available()

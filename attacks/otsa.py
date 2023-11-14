@@ -3,7 +3,7 @@ import numpy as np
 from torch.fft import ifft2 as ifft2
 import torch.nn.functional as F
 
-from scatter_batch import E_i, E, getImage
+from attacks.scatter_batch import E_i, E, getImage
 from losses import SupConLoss
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -359,5 +359,5 @@ class OTSA():
         np.save('adv_dataset_N3/adv_gt_{}'.format(suffix), gt, allow_pickle=False)
         np.savetxt('adv_dataset_N3/params_{}.txt'.format(suffix), params, fmt='%.4f')
         np.savetxt('adv_dataset_N3/params_obj_{}.txt'.format(suffix), params_filtered, fmt='%.4f')
-        return X_adv_filtered_images
+        return X_adv_images, X_adv_filtered_images
 
