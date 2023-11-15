@@ -192,9 +192,9 @@ class OTSA():
             X_adv = X_adv.float()
             X_adv = X_adv[:,None,:,:]
             output = model(X_adv)
-
+            output_bz = output[None, :, :]
             # Since not all param are updated, we compute the loss again to make sure the loss is aligned with the param
-            loss_pred = criterion(output, y_gt_batch) 
+            loss_pred = criterion(output_bz, y_gt_batch) 
             loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
             loss = loss_pred + loss_gaussian
             total_loss = torch.sum(loss)
@@ -281,17 +281,18 @@ class OTSA():
         for i, (image, label) in enumerate(zip(X_image, y_gt)):
             progress += 1
             print("Progress: {}/{}".format(progress, X_image.size()[0]))
-
+            """
             output_clear = surrogate_model(image[None,:,:])
             _, predicted_clear = torch.max(output_clear.data, 1)
             if predicted_clear.item() != label.item():
                 # was wrong prediction before attacking
                 continue
+            """
             total += 1
             gt.append(label.cpu().detach().numpy())
-            
-            notation = np.argwhere(overlays[i]==1)
-            param = self.attack(surrogate_model,criterion, image, label, notation, overlays[i], batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
+            ol = overlays[i].cpu()
+            notation = np.argwhere(ol==1)
+            param = self.attack(surrogate_model,criterion, device, image, label, notation, overlays[i], batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
 
             # filter out any scatter if its [x,y] is not on the object
             # allow scatters if partially out of object but with centroid on the object

@@ -17,7 +17,7 @@ class Augmentation():
         #normalize = transforms.Normalize(mean=mean, std=std)
 
         self. train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
+        transforms.RandomResizedCrop(size=88, scale=(0.2, 1.)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
@@ -112,7 +112,7 @@ if __name__ == '__main__':
 
     attack_2 = OTSA(0.07)
 
-    adv_2, adv_2_filtered = attack_2.generate(model,criterion, X_train_augmented, y_train, musk_train)
+    adv_2, adv_2_filtered = attack_2.generate(model,criterion, X_train_augmented, train_label, musk_train)
     print(len(adv_2), len(adv_2_filtered))
 
 
