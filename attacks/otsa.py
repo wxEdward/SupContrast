@@ -135,15 +135,17 @@ class OTSA():
         x_max = X_image.max().item()
 
         # getImage returns [batch, 88, 88], X_adv will be of the same size
-        X_image = X_image.repeat(batch,1)
-        X_image = X_image[:, None, :, :]
+        
+        #X_image = X_image[None, :, :]
+        print(X_image.size())
+        X_image = X_image.repeat(batch,1,1)
+        #X_image = X_image[:, None, :, :]
         X_adv = X_image + self.getNormImage(getImage(E(param, batch, device), device)) #* overlay
         X_adv = torch.clamp(X_adv, 0, 1)
         X_adv = X_adv.float()
         X_adv = X_adv[:,None,:,:]
-
         # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
-        ori_feat = model(X_image)
+        ori_feat = model(X_image[:, None, :, :])
         #ori_feat = ori_feat[:,, :]
         adv_feat = model(X_adv)   # output is of size [batch, 10]
         # adv_feat = output[:,None,:]
@@ -206,7 +208,7 @@ class OTSA():
 
 
              # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
-            ori_feat = model(X_image)
+            ori_feat = model(X_image[:,None,:,:])
              #ori_feat = ori_feat[:,, :]
             adv_feat = model(X_adv)   # output is of size [batch, 10]
             # adv_feat = output[:,None,:]
@@ -285,7 +287,7 @@ class OTSA():
         img = (img - min_pixel) / (max_pixel - min_pixel)
         return img
 
-    def generate(self, model, criterion,X_image, y_gt, overlays, batch=100, N=3, theta_min=np.array([0, 0, 0, -1, 0, 0, -1]), theta_max=np.array([10, 87, 87, 1, 2, 5, 1]), 
+    def generate(self, model, criterion,X_image, y_gt, overlays, batch=10, N=3, theta_min=np.array([0, 0, 0, -1, 0, 0, -1]), theta_max=np.array([10, 87, 87, 1, 2, 5, 1]), 
                  vth=0.1, lambd=0.5, lambd_gaussian=1000, n_max=20, S0=np.array([0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])):
         #S0 = np.array([0.05, 0.1, 0.1, 0, 0.01, 0.025, 0.01])
 
