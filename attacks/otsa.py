@@ -138,8 +138,10 @@ class OTSA():
         X_adv = X_image + self.getNormImage(getImage(E(param, batch, device), device)) #* overlay
         X_adv = torch.clamp(X_adv, 0, 1)
         X_adv = X_adv.float()
-        X_adv = X_adv[:,None,:,:] # X_adv resized to [batch, 1, 88, 88]
+        X_adv = X_adv[:,None,:,:]
+        print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
         output = model(X_adv)   # output is of size [batch, 10]
+        print(output.size())
         v = output[:, y_gt]  # confidence of ground truth.
         v = torch.exp(v)     # v is of size [batch, 1]
 
