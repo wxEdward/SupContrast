@@ -13,7 +13,6 @@ from losses import SupConLoss
 
 class Augmentation():
     def __init__(self) -> None:
-        
         #normalize = transforms.Normalize(mean=mean, std=std)
 
         self. train_transform = transforms.Compose([

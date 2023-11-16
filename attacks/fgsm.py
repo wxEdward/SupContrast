@@ -16,7 +16,7 @@ def project(x, original_x, epsilon, _type='linf'):
 
 class RepresentationAdv():
 
-    def __init__(self, model, epsilon, alpha, min_val, max_val, max_iters=7,  _type='linf', loss_type='sim', regularize='original'):
+    def __init__(self, model, epsilon, alpha, min_val = 0.0, max_val=1.0, max_iters=7,  _type='linf', loss_type='sim', regularize='original'):
 
         # Model
         self.model = model

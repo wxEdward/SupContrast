@@ -28,9 +28,9 @@ class TwoCropTransform:
     def __call__(self, x, y, overlays):
         augmented_x1 = self.transform(x)
         augmented_x2 = self.transform(x)
-        adv_1, _ = self.attack_1.get_loss(original_images=augmented_x1, target = augmented_x2, optimizer=self.optimizer,
+        adv_1, _ = self.attack_1.get_loss(original_images=augmented_x1, target = augmented_x1, optimizer=self.optimizer,
                                           weight=256, random_start=True)
-        adv_2 = self.attack_2.generate(self.model, x, y, overlays)
+        adv_2 = self.attack_2.generate(self.model, augmented_x2, y, overlays)
         return [adv_1, adv_2]
  
 
