@@ -135,26 +135,36 @@ class OTSA():
         x_max = X_image.max().item()
 
         # getImage returns [batch, 88, 88], X_adv will be of the same size
+        X_image = X_image.repeat(batch,1)
+        X_image = X_image[:, None, :, :]
         X_adv = X_image + self.getNormImage(getImage(E(param, batch, device), device)) #* overlay
         X_adv = torch.clamp(X_adv, 0, 1)
         X_adv = X_adv.float()
         X_adv = X_adv[:,None,:,:]
-        print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
-        output = model(X_adv)   # output is of size [batch, 10]
-        print(output.size())
-        v = output[:, y_gt]  # confidence of ground truth.
-        v = torch.exp(v)     # v is of size [batch, 1]
 
-        min_v = v.min().item() # get the minimum of v
-        min_param = param[v.argmin()]
-        
+        # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
+        ori_feat = model(X_image)
+        #ori_feat = ori_feat[:,, :]
+        adv_feat = model(X_adv)   # output is of size [batch, 10]
+        # adv_feat = output[:,None,:]
+        ##print(output.size())
+        ori_adv_feat = torch.cat([ori_feat.unsqueeze(1), adv_feat.unsqueeze(1)], dim=1)
         y_gt_batch = y_gt.repeat(batch)
-        loss_pred = criterion(output, y_gt_batch) 
+        loss_pred = criterion(ori_adv_feat) 
         loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
         loss = loss_pred + loss_gaussian
         total_loss = torch.sum(loss)  # prepare to backward for the entire batch
         
-        while iteration < n_max and v.min().item() > vth:
+
+        # v = output[:, y_gt]  # confidence of ground truth.
+        # v = torch.exp(v)     # v is of size [batch, 1]
+        
+        v = loss_pred.detach().clone()
+
+        min_v = v.max().item() # get the minimum of v
+        min_param = param[v.argmax()]
+        
+        while iteration < n_max:
             iteration += 1
             
             param.requires_grad = True
@@ -193,18 +203,31 @@ class OTSA():
             X_adv = torch.clamp(X_adv, 0, 1)
             X_adv = X_adv.float()
             X_adv = X_adv[:,None,:,:]
-            output = model(X_adv)
-            output_bz = output[None, :, :]
+
+
+             # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
+            ori_feat = model(X_image)
+             #ori_feat = ori_feat[:,, :]
+            adv_feat = model(X_adv)   # output is of size [batch, 10]
+            # adv_feat = output[:,None,:]
+            ##print(output.size())
+            ori_adv_feat = torch.cat([ori_feat.unsqueeze(1), adv_feat.unsqueeze(1)], dim=1)
+            y_gt_batch = y_gt.repeat(batch)
+            loss_pred = criterion(ori_adv_feat) 
+            
+            #output_bz = output[None, :, :]
+
             # Since not all param are updated, we compute the loss again to make sure the loss is aligned with the param
-            loss_pred = criterion(output_bz, y_gt_batch) 
+            #loss_pred = criterion(output_bz, y_gt_batch) 
             loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
             loss = loss_pred + loss_gaussian
             total_loss = torch.sum(loss)
-
-            v = output[:, y_gt]
-            v = torch.exp(v)
-
-            v = v.squeeze()
+            #loss_gaussian: [batch, 1]
+            #v: [batch, 1]
+            v = loss_pred.detach().clone()
+            #v = torch.exp(v)
+            #v: [batch,]
+            #v = v.squeeze()
             mask = torch.where(torch.abs(lambd_gaussian * 0.2 * 0.4 - loss_gaussian) < 1e-4, 0, 1)
             v = v + mask
 
@@ -263,7 +286,7 @@ class OTSA():
         return img
 
     def generate(self, model, criterion,X_image, y_gt, overlays, batch=100, N=3, theta_min=np.array([0, 0, 0, -1, 0, 0, -1]), theta_max=np.array([10, 87, 87, 1, 2, 5, 1]), 
-                 vth=0.1, lambd=0.5, lambd_gaussian=1000, n_max=90, S0=np.array([0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])):
+                 vth=0.1, lambd=0.5, lambd_gaussian=1000, n_max=20, S0=np.array([0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])):
         #S0 = np.array([0.05, 0.1, 0.1, 0, 0.01, 0.025, 0.01])
 
         surrogate_model = model

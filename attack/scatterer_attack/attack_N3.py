@@ -275,7 +275,7 @@ def getNormImage(img, mag):
     max_pixel = mag[1]
     assert(min_pixel < max_pixel)
     img = (img - min_pixel) / (max_pixel - min_pixel)
-    return img
+         return img
 
 def all():
     batch = 100 #1000
