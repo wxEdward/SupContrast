@@ -117,6 +117,7 @@ class OTSA():
         
         '''
 
+        model.eval()
         std = (theta_max - theta_min)/200
         std = np.tile(std.reshape([1,-1]), [N, 1])
         std = torch.from_numpy(std).to(device)
@@ -163,8 +164,8 @@ class OTSA():
         
         v = loss_pred.detach().clone()
 
-        min_v = v.max().item() # get the minimum of v
-        min_param = param[v.argmax()]
+        max_v = v.max().item() # get the minimum of v
+        max_param = param[v.argmax()]
         
         while iteration < n_max:
             iteration += 1
@@ -175,7 +176,7 @@ class OTSA():
             step = torch.normal(mean=S0, std=std)#.to(device)
 
             # backpropagate
-            model.zero_grad()
+            # model.no_grad()
             
             # compute gradient for the entire batch of sets of parameters
             total_loss.backward()
@@ -224,6 +225,7 @@ class OTSA():
             loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
             loss = loss_pred + loss_gaussian
             total_loss = torch.sum(loss)
+            print("total loss:", total_loss)
             #loss_gaussian: [batch, 1]
             #v: [batch, 1]
             v = loss_pred.detach().clone()
@@ -232,10 +234,10 @@ class OTSA():
             #v = v.squeeze()
             mask = torch.where(torch.abs(lambd_gaussian * 0.2 * 0.4 - loss_gaussian) < 1e-4, 0, 1)
             v = v + mask
-
-            if v.min().item() < min_v:
-                min_v = v.min().item()
-                min_param = param[v.argmin()]
+            
+            if v.max().item() < max_v:
+                max_v = v.max().item()
+                max_param = param[v.argmax()]
 
         print(iteration)
         """
@@ -244,7 +246,7 @@ class OTSA():
         """
         
 
-        return min_param
+        return max_param
 
     def notation_overlay(self, test_notation):
         overlays = torch.zeros([100, 88, 88])
@@ -283,6 +285,8 @@ class OTSA():
     def getNormImage(self, img):
         min_pixel = torch.min(img)
         max_pixel = torch.max(img)
+        if min_pixel == max_pixel:
+            print(min_pixel, max_pixel)
         assert(min_pixel < max_pixel)
         img = (img - min_pixel) / (max_pixel - min_pixel)
         return img
@@ -333,7 +337,7 @@ class OTSA():
                 param = param[None, :, :]
             assert(param.size() == (1, N, 7))
             assert(param_filtered.size() == (1, N, 7))
-            
+            print(param_filtered) 
             X_adv = image + self.getNormImage(getImage(E(param, 1, device), device))
             X_adv = torch.clamp(X_adv, 0, 1)
             X_adv = X_adv.float()
