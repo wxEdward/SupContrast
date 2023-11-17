@@ -56,6 +56,7 @@ def set_augment_model():
 def set_augment_loader():
     pass
 
+from scipy.io import savemat
 if __name__ == '__main__':
     device = torch.device("cuda")
     
@@ -68,15 +69,15 @@ if __name__ == '__main__':
     print("testing size:", X_test.size(), y_test.size())
 
     #augment = TwoCropTransform(train_transform, model, opt)
-    X_train_augmented = augment(X_train)
-    X_test_augmented = augment(X_test, y_test, musk_test)
+    #X_train_augmented = augment(X_train)
+    #X_test_augmented = augment(X_test)
 
+    #print("size after augmentation", len(X_train_augmented), X_train_augmented[0].size())
+    train_data = [[X_train[i], y_train[i]] for i in range(y_train.size()[0])]
+    test_data = [[X_test[i], y_test[i]] for i in range(y_test.size()[0])]
 
-    train_data = [[X_train_augmented[i], y_train[i]] for i in range(y_train.size()[0])]
-    test_data = [[X_test_augmented [i], y_test[i]] for i in range(y_test.size()[0])]
-
-    train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True)
-    test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
+    train_dataloader = DataLoader(train_data, batch_size=64, shuffle=False)
+    test_dataloader = DataLoader(test_data, batch_size=64, shuffle=False)
 
     
     model, criterion = set_augment_model()
@@ -89,17 +90,25 @@ if __name__ == '__main__':
 
     fgsm_data = []
     for idx, (images, labels) in enumerate(test_dataloader):
-        #images = torch.cat([images[0], images[1]], dim=0)
+        images = augment(images)
+        print("Batch ", idx)
         if torch.cuda.is_available():
-            images = images.cuda(non_blocking=True)
+            images[0] = images[0].cuda(non_blocking=True)
+            images[1] = images[1].cuda(non_blocking=True)
             labels = labels.cuda(non_blocking=True)
         bsz = labels.shape[0]
         adv_1, _ = attack_1.get_loss(original_images=images[0], target = images[1], optimizer=optimizer,
                                           weight=256, random_start=True)
-        fgsm_data.extend(adv_1)
+        #print(type(adv_1[0]), adv_1[0].size())
+        #print(adv_1.cpu().numpy())
+        fgsm_data.extend(adv_1.cpu().numpy())
     
+    fgsm_data = np.array(fgsm_data)
+    with open('adv_dataset/fgsm_data_test.npy', 'wb') as f:
+        np.save(f, fgsm_data,allow_pickle=False)
+    #np.save('adv_dataset/fgsm_data_test.npy', fgsm_data, allow_plickle=False)
     print(len(fgsm_data))
-
+    
 
 
 

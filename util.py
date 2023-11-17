@@ -125,7 +125,8 @@ def load_train_images(device):
     # imgs = torch.from_numpy(imgs).to(device)
     # labels = torch.from_numpy(labels).to(device)
     masks = torch.from_numpy(masks).to(device)
-
+    
+    y_train = labels
     y_train = y_train.squeeze()
 
     X_train_image = imgs
