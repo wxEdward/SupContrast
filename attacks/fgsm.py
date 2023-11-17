@@ -37,7 +37,7 @@ class RepresentationAdv():
         self.loss_type = loss_type
 
 
-    def get_loss(self, original_images, target, weight, random_start=True):
+    def get_loss(self, original_images, target, optimizer, weight, random_start=True):
 
         if random_start:
             rand_perturb = torch.FloatTensor(original_images.shape).uniform_(

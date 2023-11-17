@@ -122,6 +122,6 @@ if __name__ == '__main__':
     attack_1 = RepresentationAdv(model, epsilon=0.0314, alpha=0.007)
     base_optimizer = optim.SGD(model_params, lr=0.2, momentum=0.9, weight_decay=1e-6)
     optimizer = LARS(optimizer=base_optimizer, eps=1e-8, trust_coef=0.001)
-    adv_1, _ = attack_1.get_loss(original_images=X_train_augmented, target = X_train_augmented_2, optimizer=optimizer,
+    adv_1, _ = attack_1.get_loss(original_images=X_train_augmented[:10], target = X_train_augmented_2[:10], optimizer=optimizer,
                                           weight=256, random_start=True)
-    
+    print(len(adv_1))
