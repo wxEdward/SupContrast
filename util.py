@@ -126,6 +126,23 @@ def load_train_images(device):
     # labels = torch.from_numpy(labels).to(device)
     masks = torch.from_numpy(masks).to(device)
 
+    y_train = y_train.squeeze()
+
+    X_train_image = imgs
+
+    X_train_image = (X_train_image - X_train_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_train_image.ptp(
+        axis=(1, 2)).reshape([-1, 1, 1])
+    print(np.min(X_train_image), np.max(X_train_image))
+    X_train_image = X_train_image[:, np.newaxis, :, :]
+    X_train_image = torch.from_numpy(X_train_image).to(device)
+    X_train_image = X_train_image.type(torch.float32)
+
+    if y_train.min().item == 1 and y_train.max().item() == 10:
+        train_label = torch.from_numpy(y_train).to(device) - 1
+    else:
+        train_label = torch.from_numpy(y_train).to(device)
+    train_label = train_label.type(torch.int64)
+
     return imgs, labels, masks
 
 
@@ -142,3 +159,74 @@ def load_test_images(device):
     masks = torch.from_numpy(masks).to(device)
 
     return imgs, labels, masks
+
+def set_loader(model, device):
+
+    X_train, y_train, musk_train = load_train_images(device)
+    X_test, y_test, musk_test = load_test_images(device)
+
+    y_train = y_train.squeeze()
+    y_test = y_test.squeeze()
+
+    X_train_image = X_train
+    X_test_image = X_test
+
+    X_train_image = (X_train_image - X_train_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_train_image.ptp(
+        axis=(1, 2)).reshape([-1, 1, 1])
+    print(np.min(X_train_image), np.max(X_train_image))
+    X_train_image = X_train_image[:, np.newaxis, :, :]
+    X_train_image = torch.from_numpy(X_train_image).to(device)
+    X_train_image = X_train_image.type(torch.float32)
+
+    X_test_image = (X_test_image - X_test_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_test_image.ptp(
+        axis=(1, 2)).reshape([-1, 1, 1])
+    print(np.min(X_test_image), np.max(X_test_image))
+    X_test_image = X_test_image[:, np.newaxis, :, :]
+    X_test_image = torch.from_numpy(X_test_image).to(device)
+    X_test_image = X_test_image.type(torch.float32)
+
+    if y_train.min().item == 1 and y_train.max().item() == 10:
+        train_label = torch.from_numpy(y_train).to(device) - 1
+    else:
+        train_label = torch.from_numpy(y_train).to(device)
+    train_label = train_label.type(torch.int64)
+
+    if y_test.min().item == 1 and y_test.max().item() == 10:
+        test_label = torch.from_numpy(y_test).to(device) - 1
+    else:
+        test_label = torch.from_numpy(y_test).to(device)
+    test_label = test_label.type(torch.int64)
+
+    # y_attack_target = np.ones(y_test.shape)
+    # y_attack_target = np.where(y_test != y_attack_target, y_attack_target, y_attack_target+1)
+    # test_attack_target = torch.from_numpy(y_attack_target).to(device) - 1
+    # test_attack_target = test_attack_target.type(torch.int64)
+
+    print(X_train_image.size(), train_label.size())
+
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(size=opt.size, scale=(0.2, 1.)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomApply([
+            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
+        ], p=0.8),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.ToTensor(),
+        #normalize,
+    ])
+
+    augment = TwoCropTransform(train_transform, model, opt)
+    X_train_augmented = augment(X_train_image, train_label, musk_train)
+    X_test_augmented = augment(X_test_image,test_label, musk_test)
+
+    train_data = [[X_train_augmented[i], train_label[i]] for i in range(train_label.size()[0])]
+    test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
+
+    #normalize = transforms.Normalize(mean=mean, std=std)
+
+    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,
+                                  shuffle=True)
+    test_dataloader = DataLoader(test_data, batch_size=opt.batch_size,
+                                 shuffle=False)
+
+    return train_dataloader, test_dataloader
