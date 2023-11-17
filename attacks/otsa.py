@@ -47,12 +47,11 @@ class OTSA():
         
         param = param * (theta_max - theta_min) + theta_min
 
-        coord_id = np.random.choice(np.arange(0, notation.shape[0]), size=(batch, N), replace=True)
-
         for b in range(batch):
+            coord_id = np.random.choice(np.arange(0, notation[b].shape[0]), size=N, replace=True)
             for i in range(N):
-                param[b,i,1] = notation[coord_id[b][i]][0]
-                param[b,i,2] = notation[coord_id[b][i]][1]
+                param[b,i,1] = notation[coord_id[i]][0]
+                param[b,i,2] = notation[coord_id[i]][1]
 
         tau = torch.empty(batch, N, 7)
         for b in range(batch):
@@ -109,7 +108,7 @@ class OTSA():
     @param n_max: max iterations
     @param S0: initial mean stepsize (e.g., [0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])
     '''
-    def attack(self, model, criterion, device, X_image, y_gt, notation, overlay, batch, N, theta_min, theta_max, vth, lambd, lambd_gaussian, n_max, S0):
+    def attack(self, model, criterion, device, X_image, y_gt, notation, batch, N, theta_min, theta_max, vth, lambd, lambd_gaussian, n_max, S0):
         '''
         assert(mag.shape == (2, ))
         print(mag[0], mag[1])
@@ -139,39 +138,37 @@ class OTSA():
         
         #X_image = X_image[None, :, :]
         print(X_image.size())
-        X_image = X_image.repeat(batch,1,1)
+        # X_image = X_image.repeat(batch,1,1)
         #X_image = X_image[:, None, :, :]
         X_adv = X_image + self.getNormImage(getImage(E(param, batch, device), device)) #* overlay
         X_adv = torch.clamp(X_adv, 0, 1)
         X_adv = X_adv.float()
-        X_adv = X_adv[:,None,:,:]
+        #X_adv = X_adv[:,None,:,:]
         # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
-        ori_feat = model(X_image[:, None, :, :])
+        ori_feat = model(X_image)
         #ori_feat = ori_feat[:,, :]
         adv_feat = model(X_adv)   # output is of size [batch, 10]
         # adv_feat = output[:,None,:]
         ##print(output.size())
         ori_adv_feat = torch.cat([ori_feat.unsqueeze(1), adv_feat.unsqueeze(1)], dim=1)
-        y_gt_batch = y_gt.repeat(batch)
+        y_gt_batch = y_gt
         loss_pred = criterion(ori_adv_feat) 
         loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
         loss = loss_pred + loss_gaussian
         total_loss = torch.sum(loss)  # prepare to backward for the entire batch
-        
 
         # v = output[:, y_gt]  # confidence of ground truth.
         # v = torch.exp(v)     # v is of size [batch, 1]
         
-        v = loss_pred.detach().clone()
+        # v = loss_pred.detach().clone()
 
-        max_v = v.max().item() # get the minimum of v
-        max_param = param[v.argmax()]
+        # max_v = v.max().item() # get the minimum of v
+        # max_param = param[v.argmax()]
         
         while iteration < n_max:
             iteration += 1
             
             param.requires_grad = True
-
             # generate stepsize
             step = torch.normal(mean=S0, std=std)#.to(device)
 
@@ -205,17 +202,13 @@ class OTSA():
             X_adv = X_image + img_noise
             X_adv = torch.clamp(X_adv, 0, 1)
             X_adv = X_adv.float()
-            X_adv = X_adv[:,None,:,:]
+            # X_adv = X_adv[:,None,:,:]
+            # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
 
-
-             # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
-            ori_feat = model(X_image[:,None,:,:])
-             #ori_feat = ori_feat[:,, :]
             adv_feat = model(X_adv)   # output is of size [batch, 10]
-            # adv_feat = output[:,None,:]
             ##print(output.size())
             ori_adv_feat = torch.cat([ori_feat.unsqueeze(1), adv_feat.unsqueeze(1)], dim=1)
-            y_gt_batch = y_gt.repeat(batch)
+            # y_gt_batch = y_gt.repeat(batch)
             loss_pred = criterion(ori_adv_feat) 
             
             #output_bz = output[None, :, :]
@@ -228,18 +221,19 @@ class OTSA():
             print("total loss:", total_loss)
             #loss_gaussian: [batch, 1]
             #v: [batch, 1]
-            v = loss_pred.detach().clone()
+            # v = loss_pred.detach().clone()
             #v = torch.exp(v)
             #v: [batch,]
             #v = v.squeeze()
-            mask = torch.where(torch.abs(lambd_gaussian * 0.2 * 0.4 - loss_gaussian) < 1e-4, 0, 1)
-            v = v + mask
+            # mask = torch.where(torch.abs(lambd_gaussian * 0.2 * 0.4 - loss_gaussian) < 1e-4, 0, 1)
+            # v = v + mask
             
-            if v.max().item() < max_v:
-                max_v = v.max().item()
-                max_param = param[v.argmax()]
-
+            #if v.max().item() < max_v:
+                # max_v = v.max().item()
+                # max_param = param[v.argmax()]
+    
         print(iteration)
+        return param
         """
         if FLAGS.debug:
             print(min_param)
@@ -291,7 +285,7 @@ class OTSA():
         img = (img - min_pixel) / (max_pixel - min_pixel)
         return img
 
-    def generate(self, model, criterion,X_image, y_gt, overlays, batch=10, N=3, theta_min=np.array([0, 0, 0, -1, 0, 0, -1]), theta_max=np.array([10, 87, 87, 1, 2, 5, 1]), 
+    def generate(self, model, criterion, dataloader, batch=64, N=3, theta_min=np.array([0, 0, 0, -1, 0, 0, -1]), theta_max=np.array([10, 87, 87, 1, 2, 5, 1]), 
                  vth=0.1, lambd=0.5, lambd_gaussian=1000, n_max=20, S0=np.array([0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])):
         #S0 = np.array([0.05, 0.1, 0.1, 0, 0.01, 0.025, 0.01])
 
@@ -299,19 +293,22 @@ class OTSA():
         # test_notation is a dict with key '0', '1', ..., '99'
         y_gt = y_gt[:,None]
 
-        overlays = overlays.to(device) # overlays: [100, 88, 88] with objects pixel of 1
-                                                            # 100 is the number of images to attack
-                                                            # NOT the batch size!
+        # overlays: [100, 88, 88] with objects pixel of 1
+        # 100 is the number of images to attack
+        # NOT the batch size!
         X_adv_images = []
         X_adv_filtered_images = []
         gt = []
-        params = []
-        params_filtered = []
+        all_params = []
+        all_params_filtered = []
         progress = 0
         total = 0
-        for i, (image, label) in enumerate(zip(X_image, y_gt)):
+        bsz = batch
+
+        for i, (images, labels, overlays) in enumerate(dataloader):
+            # overlays = overlays.to(device) 
             progress += 1
-            print("Progress: {}/{}".format(progress, X_image.size()[0]))
+            print("Progress: {}/{}".format(progress, images.size()[0]))
             """
             output_clear = surrogate_model(image[None,:,:])
             _, predicted_clear = torch.max(output_clear.data, 1)
@@ -320,69 +317,72 @@ class OTSA():
                 continue
             """
             total += 1
-            gt.append(label.cpu().detach().numpy())
-            ol = overlays[i].cpu()
-            notation = np.argwhere(ol==1)
-            param = self.attack(surrogate_model,criterion, device, image, label, notation, overlays[i], batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
+            gt.append(labels.cpu().detach().numpy())
+            ols = overlays.cpu()
+            notations = np.array([np.argwhere(ol==1) for ol in ols]) 
+            params = self.attack(surrogate_model,criterion, device, images, labels, notations, batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
 
             # filter out any scatter if its [x,y] is not on the object
             # allow scatters if partially out of object but with centroid on the object
             # param size: [N, 7] -> [N_filtered, 7] or None
-            param = param.detach()
-            param.requires_grad = False
-            param_arg = torch.clone(param)
-            param_filtered = self.filter_param(param_arg, notation, N)  
+            params = params.detach()
+            params.requires_grad = False
+            param_args = torch.clone(params)
 
-            if param.dim() == 2:
-                param = param[None, :, :]
-            assert(param.size() == (1, N, 7))
-            assert(param_filtered.size() == (1, N, 7))
-            print(param_filtered) 
-            X_adv = image + self.getNormImage(getImage(E(param, 1, device), device))
-            X_adv = torch.clamp(X_adv, 0, 1)
-            X_adv = X_adv.float()
-            X_adv = X_adv.squeeze()
+            for j in range(bsz):
+                param = params[j]
+                param_filtered = self.filter_param(param_args[j], notations[j], N) 
 
-            X_adv_filtered = image + self.getNormImage(getImage(E(param_filtered, 1, device), device))
-            X_adv_filtered = torch.clamp(X_adv_filtered, 0, 1).float().squeeze()
+                if param.dim() == 2:
+                    param = param[None, :, :]
+                assert(param.size() == (1, N, 7))
+                assert(param_filtered.size() == (1, N, 7))
+                print(param_filtered) 
+                X_adv = images[j] + self.getNormImage(getImage(E(param, 1, device), device))
+                X_adv = torch.clamp(X_adv, 0, 1)
+                X_adv = X_adv.float()
+                X_adv = X_adv.squeeze()
 
-            """
-            
-            # DEBUG
-            if FLAGS.debug:
-                print(param.size())
-                print(X_adv.min(), X_adv.max())
-                print(X_adv.size())
-                #if X_adv.size()[0] != 1:
-                #    X_adv = X_adv[None, :,:]
-                X_adv = X_adv[None,None,:,:]
-                output = surrogate_model(X_adv)
-                print(torch.exp(output).cpu().detach().numpy())
-                print(label.item(), output.argmax().item())
+                X_adv_filtered = images[j] + self.getNormImage(getImage(E(param_filtered, 1, device), device))
+                X_adv_filtered = torch.clamp(X_adv_filtered, 0, 1).float().squeeze()
 
-                X_adv_filtered = X_adv_filtered[None,None,:,:]
-                output = surrogate_model(X_adv_filtered)
-                print(torch.exp(output).cpu().detach().numpy())
-                print(label.item(), output.argmax().item())          
-            # END DEBUG
-            """
-            X_adv = X_adv.squeeze().cpu().detach().numpy()
-            X_adv_images.append(X_adv)
+                """
+                
+                # DEBUG
+                if FLAGS.debug:
+                    print(param.size())
+                    print(X_adv.min(), X_adv.max())
+                    print(X_adv.size())
+                    #if X_adv.size()[0] != 1:
+                    #    X_adv = X_adv[None, :,:]
+                    X_adv = X_adv[None,None,:,:]
+                    output = surrogate_model(X_adv)
+                    print(torch.exp(output).cpu().detach().numpy())
+                    print(label.item(), output.argmax().item())
 
-            X_adv_filtered = X_adv_filtered.squeeze().cpu().detach().numpy()
-            X_adv_filtered_images.append(X_adv_filtered)
+                    X_adv_filtered = X_adv_filtered[None,None,:,:]
+                    output = surrogate_model(X_adv_filtered)
+                    print(torch.exp(output).cpu().detach().numpy())
+                    print(label.item(), output.argmax().item())          
+                # END DEBUG
+                """
+                X_adv = X_adv.squeeze().cpu().detach().numpy()
+                X_adv_images.append(X_adv)
 
-            param = param.squeeze()
-            params.append(param.cpu().detach().numpy())
+                X_adv_filtered = X_adv_filtered.squeeze().cpu().detach().numpy()
+                X_adv_filtered_images.append(X_adv_filtered)
 
-            param_filtered = param_filtered.squeeze()
-            params_filtered.append(param_filtered.cpu().detach().numpy())
+                param = param.squeeze()
+                all_params.append(param.cpu().detach().numpy())
+
+                param_filtered = param_filtered.squeeze()
+                all_params_filtered.append(param_filtered.cpu().detach().numpy())
 
         X_adv_images = np.array(X_adv_images)
         X_adv_filtered_images = np.array(X_adv_filtered_images)
 
-        params = np.array(params).reshape([-1, 7])
-        params_filtered = np.array(params_filtered).reshape([-1, 7])
+        all_params = np.array(params).reshape([-1, 7])
+        all_params_filtered = np.array(params_filtered).reshape([-1, 7])
 
         gt = np.array(gt)
         suffix = 'ACONV'

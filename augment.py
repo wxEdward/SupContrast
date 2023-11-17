@@ -87,8 +87,10 @@ if __name__ == '__main__':
     base_optimizer = optim.SGD(model_params, lr=0.2, momentum=0.9, weight_decay=1e-6)
     optimizer = LARS(optimizer=base_optimizer, eps=1e-8, trust_coef=0.001)
 
+    '''
 
     fgsm_data = []
+
     for idx, (images, labels) in enumerate(test_dataloader):
         images = augment(images)
         print("Batch ", idx)
@@ -109,13 +111,12 @@ if __name__ == '__main__':
     #np.save('adv_dataset/fgsm_data_test.npy', fgsm_data, allow_plickle=False)
     print(len(fgsm_data))
     
-
-
-
-    #attack_2 = OTSA(0.07)
-
-    #adv_2, adv_2_filtered = attack_2.generate(model,criterion, X_train_augmented, train_label, musk_train)
-    #print(len(adv_2), len(adv_2_filtered))
+    '''
+    test_data = [[X_test[i], y_test[i], musk_test[i]] for i in range(y_test.size()[0])]
+    test_dataloader = DataLoader(test_data, batch_size=64, shuffle=False)
+    attack_2 = OTSA(0.07)
+    adv_2, adv_2_filtered = attack_2.generate(model, criterion, test_dataloader, batch=64)
+    print(len(adv_2), len(adv_2_filtered))
 
 
     # print(len(adv_1))

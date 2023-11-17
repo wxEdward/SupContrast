@@ -132,85 +132,27 @@ def parse_option():
 
 
 def set_loader(opt, model, device):
-    import scipy.io
-    # train_data = scipy.io.loadmat('./binversion/train.mat')
-    # test_data = scipy.io.loadmat('./binversion/test.mat')
+    ori_train_X, ori_train_y, _ = load_train_images(device)
+    # ori_test_X, ori_test_y, _ = load_test_images(device)
 
-    # train_data = scipy.io.loadmat('/data/MSTAR/mat/train88.mat')
-    # test_data = scipy.io.loadmat('/data/MSTAR/mat/test88.mat')
+    fgsm_train_X = np.load('adv_dataset/fgsm_data.npy')
+    otsa_train_X = np.load('adv_dataset/otsa_data.npy')
 
-    # train_data = scipy.io.loadmat('/data/tian/MSTAR/dataset88/train88.mat')
-    # test_data = scipy.io.loadmat('/data/tian/MSTAR/dataset88/test88.mat')
+    #augment = TwoCropTransform(train_transform, model, opt)
+    #X_train_augmented = augment(X_train_image, train_label, musk_train)
+    #X_test_augmented = augment(X_test_image,test_label, musk_test)
 
-    X_train, y_train, musk_train = load_train_images(device)
-    X_test, y_test, musk_test = load_test_images(device)
 
-    y_train = y_train.squeeze()
-    y_test = y_test.squeeze()
-
-    X_train_image = X_train
-    X_test_image = X_test
-
-    X_train_image = (X_train_image - X_train_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_train_image.ptp(
-        axis=(1, 2)).reshape([-1, 1, 1])
-    print(np.min(X_train_image), np.max(X_train_image))
-    X_train_image = X_train_image[:, np.newaxis, :, :]
-    X_train_image = torch.from_numpy(X_train_image).to(device)
-    X_train_image = X_train_image.type(torch.float32)
-
-    X_test_image = (X_test_image - X_test_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_test_image.ptp(
-        axis=(1, 2)).reshape([-1, 1, 1])
-    print(np.min(X_test_image), np.max(X_test_image))
-    X_test_image = X_test_image[:, np.newaxis, :, :]
-    X_test_image = torch.from_numpy(X_test_image).to(device)
-    X_test_image = X_test_image.type(torch.float32)
-
-    if y_train.min().item == 1 and y_train.max().item() == 10:
-        train_label = torch.from_numpy(y_train).to(device) - 1
-    else:
-        train_label = torch.from_numpy(y_train).to(device)
-    train_label = train_label.type(torch.int64)
-
-    if y_test.min().item == 1 and y_test.max().item() == 10:
-        test_label = torch.from_numpy(y_test).to(device) - 1
-    else:
-        test_label = torch.from_numpy(y_test).to(device)
-    test_label = test_label.type(torch.int64)
-
-    # y_attack_target = np.ones(y_test.shape)
-    # y_attack_target = np.where(y_test != y_attack_target, y_attack_target, y_attack_target+1)
-    # test_attack_target = torch.from_numpy(y_attack_target).to(device) - 1
-    # test_attack_target = test_attack_target.type(torch.int64)
-
-    print(X_train_image.size(), train_label.size())
-
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(size=opt.size, scale=(0.2, 1.)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomApply([
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
-        ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
-        transforms.ToTensor(),
-        #normalize,
-    ])
-
-    augment = TwoCropTransform(train_transform, model, opt)
-    X_train_augmented = augment(X_train_image, train_label, musk_train)
-    X_test_augmented = augment(X_test_image,test_label, musk_test)
-
-    train_data = [[X_train_augmented[i], train_label[i]] for i in range(train_label.size()[0])]
-    test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
+    train_data = [[fgsm_train_X[i], otsa_train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
+    # test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
 
     #normalize = transforms.Normalize(mean=mean, std=std)
 
     train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,
                                   shuffle=True)
-    test_dataloader = DataLoader(test_data, batch_size=opt.batch_size,
-                                 shuffle=False)
-
-    return train_dataloader, test_dataloader
-
+    #test_dataloader = DataLoader(test_data, batch_size=opt.batch_size,
+                                 # shuffle=False)
+    return train_dataloader
     # return X_train_image, X_test_image, train_label, test_label #, test_attack_target
 
 
@@ -295,7 +237,8 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
     for idx, (images, labels) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
-        images = torch.cat([images[0], images[1]], dim=0)
+        i_1, i_2 = torch.split(images, [1,1], dim=1)
+        images = torch.cat([i_1, i_2], dim=0)
         if torch.cuda.is_available():
             images = images.cuda(non_blocking=True)
             labels = labels.cuda(non_blocking=True)
@@ -339,6 +282,7 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
             sys.stdout.flush()
 
     return losses.avg
+
 
 
 def main():
