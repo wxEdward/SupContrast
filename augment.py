@@ -4,12 +4,14 @@ import numpy as np
 from scipy.io import loadmat
 # from main_supcon import set_model
 from attacks.otsa import OTSA
+from attacks.fgsm import RepresentationAdv
 from util import load_train_images, load_test_images
 import torch.backends.cudnn as cudnn
 from networks.resnet_big import SupConResNet
 from losses import SupConLoss
 # from otsa import OTSA
-
+import torch.optim as optim
+from torchlars import LARS
 
 class Augmentation():
     def __init__(self) -> None:
@@ -96,6 +98,7 @@ if __name__ == '__main__':
 
     #augment = TwoCropTransform(train_transform, model, opt)
     X_train_augmented = augment(X_train_image)
+    X_train_augmented_2 = augment(X_train_image)
     #X_test_augmented = augment(X_test_image,test_label, musk_test)
 
     train_data = [[X_train_augmented[i], train_label[i]] for i in range(train_label.size()[0])]
@@ -109,11 +112,16 @@ if __name__ == '__main__':
     
     model, criterion = set_augment_model()
 
-    attack_2 = OTSA(0.07)
+    #attack_2 = OTSA(0.07)
 
-    adv_2, adv_2_filtered = attack_2.generate(model,criterion, X_train_augmented, train_label, musk_train)
-    print(len(adv_2), len(adv_2_filtered))
+    #adv_2, adv_2_filtered = attack_2.generate(model,criterion, X_train_augmented, train_label, musk_train)
+    #print(len(adv_2), len(adv_2_filtered))
 
-
-
-
+    model_params = []
+    model_params += model.parameters()
+    attack_1 = RepresentationAdv(model, epsilon=0.0314, alpha=0.007)
+    base_optimizer = optim.SGD(model_params, lr=0.2, momentum=0.9, weight_decay=1e-6)
+    optimizer = LARS(optimizer=base_optimizer, eps=1e-8, trust_coef=0.001)
+    adv_1, _ = attack_1.get_loss(original_images=X_train_augmented, target = X_train_augmented_2, optimizer=optimizer,
+                                          weight=256, random_start=True)
+    
