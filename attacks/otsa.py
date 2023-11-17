@@ -46,12 +46,12 @@ class OTSA():
         theta_max = torch.from_numpy(theta_max).to(device)
         
         param = param * (theta_max - theta_min) + theta_min
-
+        
         for b in range(batch):
             coord_id = np.random.choice(np.arange(0, notation[b].shape[0]), size=N, replace=True)
             for i in range(N):
-                param[b,i,1] = notation[coord_id[i]][0]
-                param[b,i,2] = notation[coord_id[i]][1]
+                param[b,i,1] = notation[b][coord_id[i]][0]
+                param[b,i,2] = notation[b][coord_id[i]][1]
 
         tau = torch.empty(batch, N, 7)
         for b in range(batch):
@@ -87,8 +87,9 @@ class OTSA():
     def gaussian(self, params, notation, batch, N, device, sigma=0.4):
         assert(params.size() == (batch, N, 7))
         score = torch.zeros([batch, N], device=device)
-        for coor in notation:
-            score += torch.exp(-0.5 * ((params[:,:,1] - coor[0]) ** 2 + (params[:,:,2] - coor[1]) ** 2) / (sigma ** 2)) / (2*torch.pi)
+        for b in range(batch):
+            for coor in notation[b]:
+                score[b] += torch.exp(-0.5 * ((params[b,:,1] - coor[0]) ** 2 + (params[b,:,2] - coor[1]) ** 2) / (sigma ** 2)) / (2*torch.pi)
         #score = torch.fmin(score, 0.2 * sigma)
         score = torch.clamp(score, max=0.2*sigma)
         return torch.mean(score, axis=1)
@@ -124,7 +125,7 @@ class OTSA():
         S0 = torch.from_numpy(S0).to(device)
 
         param, freeze = self.initParam(batch, N, theta_min, theta_max, notation, device)#.to(device)
-
+        print(param[0])
         theta_min = np.tile(theta_min.reshape([1,-1]), [N, 1])
         theta_min = torch.from_numpy(theta_min).to(device)
         theta_max = np.tile(theta_max.reshape([1,-1]), [N, 1])
@@ -139,12 +140,14 @@ class OTSA():
         #X_image = X_image[None, :, :]
         print(X_image.size())
         # X_image = X_image.repeat(batch,1,1)
+        X_image = X_image.squeeze(1)
         #X_image = X_image[:, None, :, :]
         X_adv = X_image + self.getNormImage(getImage(E(param, batch, device), device)) #* overlay
         X_adv = torch.clamp(X_adv, 0, 1)
         X_adv = X_adv.float()
-        #X_adv = X_adv[:,None,:,:]
-        # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
+        X_adv = X_adv[:,None,:,:]
+        X_image = X_image[:,None,:,:]
+        print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
         ori_feat = model(X_image)
         #ori_feat = ori_feat[:,, :]
         adv_feat = model(X_adv)   # output is of size [batch, 10]
@@ -157,6 +160,7 @@ class OTSA():
         loss = loss_pred + loss_gaussian
         total_loss = torch.sum(loss)  # prepare to backward for the entire batch
 
+        X_image = X_image.squeeze(1)
         # v = output[:, y_gt]  # confidence of ground truth.
         # v = torch.exp(v)     # v is of size [batch, 1]
         
@@ -165,7 +169,7 @@ class OTSA():
         # max_v = v.max().item() # get the minimum of v
         # max_param = param[v.argmax()]
         
-        while iteration < n_max:
+        while iteration < 10:
             iteration += 1
             
             param.requires_grad = True
@@ -176,7 +180,7 @@ class OTSA():
             # model.no_grad()
             
             # compute gradient for the entire batch of sets of parameters
-            total_loss.backward()
+            total_loss.backward(retain_graph=True)
 
             param_grad = param.grad.data
             sign_param_grad = param_grad.sign()
@@ -193,16 +197,17 @@ class OTSA():
                 for b in range(batch):
                     if torch.max(img_batch[b]).item() > x_max:
                         param_new[b][i][0] = param_new[b][i][0] / (np.random.uniform() + param_new[b][i][0])
-
+            # print(param)
             param = param_new
             S0 = lambd * S0 + (1-lambd) * torch.abs(delta_param)
 
             param.requires_grad = True
             img_noise = self.getNormImage(getImage(E(param, batch, device), device)) #* overlay
+            #X_image = X_image.squeeze(1)
             X_adv = X_image + img_noise
             X_adv = torch.clamp(X_adv, 0, 1)
             X_adv = X_adv.float()
-            # X_adv = X_adv[:,None,:,:]
+            X_adv = X_adv[:,None,:,:]
             # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
 
             adv_feat = model(X_adv)   # output is of size [batch, 10]
@@ -255,10 +260,15 @@ class OTSA():
         if param.dim() == 2:
             param = param[None, :, :]
             assert(param.size() == (1, N, 7))
+
+        #print(param)
+        #print(notation)
+
         for batch in range(param.shape[0]):
             for i in range(N):
                 xy = param[batch, i, 1:3].cpu().detach().numpy()
                 xy = np.round(xy)  # TODO: is round ok? 
+                #print(xy)
                 if not xy.tolist() in notation.tolist():
                 #if not (xy == notation).any():
                     #param[batch, i, 0] = 0
@@ -291,7 +301,7 @@ class OTSA():
 
         surrogate_model = model
         # test_notation is a dict with key '0', '1', ..., '99'
-        y_gt = y_gt[:,None]
+        # y_gt = y_gt[:,None]
 
         # overlays: [100, 88, 88] with objects pixel of 1
         # 100 is the number of images to attack
@@ -319,7 +329,7 @@ class OTSA():
             total += 1
             gt.append(labels.cpu().detach().numpy())
             ols = overlays.cpu()
-            notations = np.array([np.argwhere(ol==1) for ol in ols]) 
+            notations = [np.argwhere(ol==1) for ol in ols]
             params = self.attack(surrogate_model,criterion, device, images, labels, notations, batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
 
             # filter out any scatter if its [x,y] is not on the object
@@ -331,13 +341,17 @@ class OTSA():
 
             for j in range(bsz):
                 param = params[j]
+                print("for image ",j)
+                # print(param)
+                # print(notations)
                 param_filtered = self.filter_param(param_args[j], notations[j], N) 
 
                 if param.dim() == 2:
                     param = param[None, :, :]
                 assert(param.size() == (1, N, 7))
                 assert(param_filtered.size() == (1, N, 7))
-                print(param_filtered) 
+                print(param_filtered)
+                
                 X_adv = images[j] + self.getNormImage(getImage(E(param, 1, device), device))
                 X_adv = torch.clamp(X_adv, 0, 1)
                 X_adv = X_adv.float()
@@ -381,8 +395,8 @@ class OTSA():
         X_adv_images = np.array(X_adv_images)
         X_adv_filtered_images = np.array(X_adv_filtered_images)
 
-        all_params = np.array(params).reshape([-1, 7])
-        all_params_filtered = np.array(params_filtered).reshape([-1, 7])
+        all_params = np.array(all_params).reshape([-1, 7])
+        all_params_filtered = np.array(all_params_filtered).reshape([-1, 7])
 
         gt = np.array(gt)
         suffix = 'ACONV'
