@@ -143,8 +143,7 @@ def load_train_images(device):
         train_label = torch.from_numpy(y_train).to(device)
     train_label = train_label.type(torch.int64)
 
-    return imgs, labels, masks
-
+    return X_train_image, train_label, masks
 
 def load_test_images(device):
 
@@ -154,29 +153,9 @@ def load_test_images(device):
     imgs = data['test_data']
     labels = data['test_label']
 
-    # imgs = torch.from_numpy(imgs).to(device)
-    # labels = torch.from_numpy(labels).to(device)
-    masks = torch.from_numpy(masks).to(device)
-
-    return imgs, labels, masks
-
-def set_loader(model, device):
-
-    X_train, y_train, musk_train = load_train_images(device)
-    X_test, y_test, musk_test = load_test_images(device)
-
-    y_train = y_train.squeeze()
+    X_test_image = imgs
+    y_test = labels
     y_test = y_test.squeeze()
-
-    X_train_image = X_train
-    X_test_image = X_test
-
-    X_train_image = (X_train_image - X_train_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_train_image.ptp(
-        axis=(1, 2)).reshape([-1, 1, 1])
-    print(np.min(X_train_image), np.max(X_train_image))
-    X_train_image = X_train_image[:, np.newaxis, :, :]
-    X_train_image = torch.from_numpy(X_train_image).to(device)
-    X_train_image = X_train_image.type(torch.float32)
 
     X_test_image = (X_test_image - X_test_image.min(axis=(1, 2)).reshape([-1, 1, 1])) / X_test_image.ptp(
         axis=(1, 2)).reshape([-1, 1, 1])
@@ -185,35 +164,18 @@ def set_loader(model, device):
     X_test_image = torch.from_numpy(X_test_image).to(device)
     X_test_image = X_test_image.type(torch.float32)
 
-    if y_train.min().item == 1 and y_train.max().item() == 10:
-        train_label = torch.from_numpy(y_train).to(device) - 1
-    else:
-        train_label = torch.from_numpy(y_train).to(device)
-    train_label = train_label.type(torch.int64)
-
     if y_test.min().item == 1 and y_test.max().item() == 10:
         test_label = torch.from_numpy(y_test).to(device) - 1
     else:
         test_label = torch.from_numpy(y_test).to(device)
     test_label = test_label.type(torch.int64)
 
-    # y_attack_target = np.ones(y_test.shape)
-    # y_attack_target = np.where(y_test != y_attack_target, y_attack_target, y_attack_target+1)
-    # test_attack_target = torch.from_numpy(y_attack_target).to(device) - 1
-    # test_attack_target = test_attack_target.type(torch.int64)
+    return X_test_image, test_label, masks
 
-    print(X_train_image.size(), train_label.size())
 
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(size=opt.size, scale=(0.2, 1.)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomApply([
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
-        ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
-        transforms.ToTensor(),
-        #normalize,
-    ])
+
+
+def set_loader(model, device):
 
     augment = TwoCropTransform(train_transform, model, opt)
     X_train_augmented = augment(X_train_image, train_label, musk_train)
