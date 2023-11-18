@@ -40,7 +40,8 @@ class OTSA():
     def initParam(self, batch, N, theta_min, theta_max, notation, device):
         mode = np.random.randint(0, 8, size=(batch, N))
         param = torch.rand((batch, N, 7), device=device)
-
+        #print("size of notation",len(notation))
+        #print(notation[0])
         # control initial x and y
         theta_min = torch.from_numpy(theta_min).to(device)
         theta_max = torch.from_numpy(theta_max).to(device)
@@ -125,7 +126,7 @@ class OTSA():
         S0 = torch.from_numpy(S0).to(device)
 
         param, freeze = self.initParam(batch, N, theta_min, theta_max, notation, device)#.to(device)
-        print(param[0])
+        #print(param[0])
         theta_min = np.tile(theta_min.reshape([1,-1]), [N, 1])
         theta_min = torch.from_numpy(theta_min).to(device)
         theta_max = np.tile(theta_max.reshape([1,-1]), [N, 1])
@@ -138,7 +139,7 @@ class OTSA():
         # getImage returns [batch, 88, 88], X_adv will be of the same size
         
         #X_image = X_image[None, :, :]
-        print(X_image.size())
+        # print(X_image.size())
         # X_image = X_image.repeat(batch,1,1)
         X_image = X_image.squeeze(1)
         #X_image = X_image[:, None, :, :]
@@ -147,7 +148,7 @@ class OTSA():
         X_adv = X_adv.float()
         X_adv = X_adv[:,None,:,:]
         X_image = X_image[:,None,:,:]
-        print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
+        # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
         ori_feat = model(X_image)
         #ori_feat = ori_feat[:,, :]
         adv_feat = model(X_adv)   # output is of size [batch, 10]
@@ -318,7 +319,8 @@ class OTSA():
         for i, (images, labels, overlays) in enumerate(dataloader):
             # overlays = overlays.to(device) 
             progress += 1
-            print("Progress: {}/{}".format(progress, images.size()[0]))
+            #print("Progress: {}/{}".format(progress, images.size()[0]))
+            print("Batch:",i)
             """
             output_clear = surrogate_model(image[None,:,:])
             _, predicted_clear = torch.max(output_clear.data, 1)
@@ -328,8 +330,9 @@ class OTSA():
             """
             total += 1
             gt.append(labels.cpu().detach().numpy())
-            ols = overlays.cpu()
+            ols = overlays.cpu().numpy()
             notations = [np.argwhere(ol==1) for ol in ols]
+            # print(notations[0])
             params = self.attack(surrogate_model,criterion, device, images, labels, notations, batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
 
             # filter out any scatter if its [x,y] is not on the object
@@ -341,16 +344,17 @@ class OTSA():
 
             for j in range(bsz):
                 param = params[j]
-                print("for image ",j)
-                # print(param)
-                # print(notations)
+                #print("for image ",j)
+                #print(param)
+                #print("Shape of notation", notations[j].shape)
+                #print(notations[j])
                 param_filtered = self.filter_param(param_args[j], notations[j], N) 
 
                 if param.dim() == 2:
                     param = param[None, :, :]
                 assert(param.size() == (1, N, 7))
                 assert(param_filtered.size() == (1, N, 7))
-                print(param_filtered)
+                #print(param_filtered)
                 
                 X_adv = images[j] + self.getNormImage(getImage(E(param, 1, device), device))
                 X_adv = torch.clamp(X_adv, 0, 1)
@@ -399,11 +403,11 @@ class OTSA():
         all_params_filtered = np.array(all_params_filtered).reshape([-1, 7])
 
         gt = np.array(gt)
-        suffix = 'ACONV'
-        np.save('adv_dataset_N3/adv_images_{}'.format(suffix), X_adv_images, allow_pickle=False)
-        np.save('adv_dataset_N3/adv_images_obj_{}'.format(suffix), X_adv_filtered_images, allow_pickle=False)
-        np.save('adv_dataset_N3/adv_gt_{}'.format(suffix), gt, allow_pickle=False)
-        np.savetxt('adv_dataset_N3/params_{}.txt'.format(suffix), params, fmt='%.4f')
-        np.savetxt('adv_dataset_N3/params_obj_{}.txt'.format(suffix), params_filtered, fmt='%.4f')
+        suffix = 'res50'
+        np.save('adv_dataset/adv_images_{}'.format(suffix), X_adv_images, allow_pickle=False)
+        np.save('adv_dataset/adv_images_obj_{}'.format(suffix), X_adv_filtered_images, allow_pickle=False)
+        np.save('adv_dataset/adv_gt_{}'.format(suffix), gt, allow_pickle=False)
+        np.savetxt('adv_dataset/params_{}.txt'.format(suffix), all_params, fmt='%.4f')
+        np.savetxt('adv_dataset/params_obj_{}.txt'.format(suffix), all_params_filtered, fmt='%.4f')
         return X_adv_images, X_adv_filtered_images
 
