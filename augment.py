@@ -112,10 +112,15 @@ if __name__ == '__main__':
     print(len(fgsm_data))
     
     '''
+    
     test_data = [[X_test[i], y_test[i], musk_test[i]] for i in range(y_test.size()[0])]
     test_dataloader = DataLoader(test_data, batch_size=64, shuffle=False)
     attack_2 = OTSA(0.07)
     adv_2, adv_2_filtered = attack_2.generate(model, criterion, test_dataloader, batch=64)
+    with open('adv_dataset/otsa_data_test.npy','wb') as f:
+        np.save(f, adv_2, allow_pickle=False)
+    with open('adv_dataset/otsa_data_filtered.npy','wb') as f:
+        np.save(f, adv_2_filtered, allow_pickle=False)
     print(len(adv_2), len(adv_2_filtered))
 
 

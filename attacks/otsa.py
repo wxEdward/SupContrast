@@ -291,7 +291,7 @@ class OTSA():
         min_pixel = torch.min(img)
         max_pixel = torch.max(img)
         if min_pixel == max_pixel:
-            print(min_pixel, max_pixel)
+            return img
         assert(min_pixel < max_pixel)
         img = (img - min_pixel) / (max_pixel - min_pixel)
         return img
@@ -403,11 +403,11 @@ class OTSA():
         all_params_filtered = np.array(all_params_filtered).reshape([-1, 7])
 
         gt = np.array(gt)
-        suffix = 'res50'
-        np.save('adv_dataset/adv_images_{}'.format(suffix), X_adv_images, allow_pickle=False)
-        np.save('adv_dataset/adv_images_obj_{}'.format(suffix), X_adv_filtered_images, allow_pickle=False)
-        np.save('adv_dataset/adv_gt_{}'.format(suffix), gt, allow_pickle=False)
-        np.savetxt('adv_dataset/params_{}.txt'.format(suffix), all_params, fmt='%.4f')
-        np.savetxt('adv_dataset/params_obj_{}.txt'.format(suffix), all_params_filtered, fmt='%.4f')
+        #suffix = 'res50'
+        #np.save('adv_dataset/adv_images_test_{}'.format(suffix), X_adv_images, allow_pickle=False)
+        #np.save('adv_dataset/adv_images_test_obj_{}'.format(suffix), X_adv_filtered_images, allow_pickle=False)
+        # np.save('adv_dataset/adv_test_gt_{}'.format(suffix), gt, allow_pickle=False)
+        # np.savetxt('adv_dataset/test_params_{}.txt'.format(suffix), all_params, fmt='%.4f')
+        # np.savetxt('adv_dataset/test_params_obj_{}.txt'.format(suffix), all_params_filtered, fmt='%.4f')
         return X_adv_images, X_adv_filtered_images
 
