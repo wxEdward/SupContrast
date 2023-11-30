@@ -333,6 +333,8 @@ class OTSA():
             ols = overlays.cpu().numpy()
             notations = [np.argwhere(ol==1) for ol in ols]
             # print(notations[0])
+            batch = len(notations)
+            bsz = batch
             params = self.attack(surrogate_model,criterion, device, images, labels, notations, batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
 
             # filter out any scatter if its [x,y] is not on the object
@@ -402,7 +404,7 @@ class OTSA():
         all_params = np.array(all_params).reshape([-1, 7])
         all_params_filtered = np.array(all_params_filtered).reshape([-1, 7])
 
-        gt = np.array(gt)
+        # gt = np.array(gt)
         #suffix = 'res50'
         #np.save('adv_dataset/adv_images_test_{}'.format(suffix), X_adv_images, allow_pickle=False)
         #np.save('adv_dataset/adv_images_test_obj_{}'.format(suffix), X_adv_filtered_images, allow_pickle=False)
