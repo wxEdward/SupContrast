@@ -34,7 +34,7 @@ def parse_option():
                         help='print frequency')
     parser.add_argument('--save_freq', type=int, default=50,
                         help='save frequency')
-    parser.add_argument('--batch_size', type=int, default=256,
+    parser.add_argument('--batch_size', type=int, default=32,
                         help='batch_size')
     parser.add_argument('--num_workers', type=int, default=16,
                         help='num of workers to use')
@@ -55,10 +55,10 @@ def parse_option():
 
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
-    parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'path'], help='dataset')
-    parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
-    parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
+    # parser.add_argument('--dataset', type=str, default='cifar10',
+                        #choices=['cifar10', 'cifar100', 'path'], help='dataset')
+    # parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
+    # parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
     parser.add_argument('--data_folder', type=str, default=None, help='path to custom dataset')
     parser.add_argument('--size', type=int, default=32, help='parameter for RandomResizedCrop')
 
@@ -83,14 +83,16 @@ def parse_option():
     opt = parser.parse_args()
 
     # check if dataset is path that passed required arguments
+    '''
+    
     if opt.dataset == 'path':
         assert opt.data_folder is not None \
                and opt.mean is not None \
                and opt.std is not None
-
+    '''
     # set the path according to the environment
     if opt.data_folder is None:
-        opt.data_folder = './datasets/'
+        opt.data_folder = './adv_dataset/'
     opt.model_path = './save/SupCon/{}_models'.format(opt.dataset)
     opt.tb_path = './save/SupCon/{}_tensorboard'.format(opt.dataset)
 
@@ -133,17 +135,19 @@ def parse_option():
 
 def set_loader(opt, model, device):
     ori_train_X, ori_train_y, _ = load_train_images(device)
-    # ori_test_X, ori_test_y, _ = load_test_images(device)
+    #ori_test_X, ori_test_y, _ = load_test_images(device)
 
-    fgsm_train_X = np.load('adv_dataset/fgsm_data.npy')
-    otsa_train_X = np.load('adv_dataset/otsa_data.npy')
+    fgsm_train_X = np.load('adv_dataset/fgsm_data_train.npy')
+    otsa_train_X = np.load('adv_dataset/otsa_data_train_filtered.npy')
+
+    fgsm_train_X = torch.from_numpy(fgsm_train_X).to(device)
+    otsa_train_X = torch.from_numpy(otsa_train_X).to(device)
 
     #augment = TwoCropTransform(train_transform, model, opt)
     #X_train_augmented = augment(X_train_image, train_label, musk_train)
     #X_test_augmented = augment(X_test_image,test_label, musk_test)
 
-
-    train_data = [[fgsm_train_X[i], otsa_train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
+    train_data = [[ori_train_X[i], fgsm_train_X[i], otsa_train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
     # test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
 
     #normalize = transforms.Normalize(mean=mean, std=std)
@@ -154,7 +158,6 @@ def set_loader(opt, model, device):
                                  # shuffle=False)
     return train_dataloader
     # return X_train_image, X_test_image, train_label, test_label #, test_attack_target
-
 
 '''
 
@@ -237,8 +240,8 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
     for idx, (images, labels) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
-        i_1, i_2 = torch.split(images, [1,1], dim=1)
-        images = torch.cat([i_1, i_2], dim=0)
+        i_1, i_2, i_3 = torch.split(images, [1,1,1], dim=1)
+        images = torch.cat([i_1, i_2, i_3], dim=0)
         if torch.cuda.is_available():
             images = images.cuda(non_blocking=True)
             labels = labels.cuda(non_blocking=True)
@@ -249,8 +252,8 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
 
         # compute loss
         features = model(images)
-        f1, f2 = torch.split(features, [bsz, bsz], dim=0)
-        features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+        f1, f2, f3 = torch.split(features, [bsz, bsz, bsz], dim=0)
+        features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1), f3.unsqueeze(1)], dim=1)
         if opt.method == 'SupCon':
             loss = criterion(features, labels)
         elif opt.method == 'SimCLR':
@@ -296,7 +299,6 @@ def main():
 
     # build data loader
     train_loader, _ = set_loader(opt, model, device)
-
 
     # build optimizer
     optimizer = set_optimizer(opt, model)
