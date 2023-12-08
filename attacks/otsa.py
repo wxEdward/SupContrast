@@ -35,7 +35,7 @@ mode
 class OTSA():
     def __init__(self, temerature) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.criterion = SupConLoss(temperature=temerature)
+        # self.criterion = SupConLoss(temperature=temerature)
 
     def initParam(self, batch, N, theta_min, theta_max, notation, device):
         mode = np.random.randint(0, 8, size=(batch, N))

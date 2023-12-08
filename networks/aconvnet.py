@@ -13,7 +13,7 @@ class AConvNet(nn.Module):
     def __init__(self, num_classes: int = 10, dropout: float = 0.5) -> None:
         super().__init__()
         #_log_api_usage_once(self)
-        self.classifier = nn.Sequential(
+        self.encoder = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=5, padding=2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
@@ -26,20 +26,17 @@ class AConvNet(nn.Module):
             nn.Conv2d(64, 128, kernel_size=6),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
-            nn.Conv2d(128, 10, kernel_size=3, stride=3)
+            nn.Conv2d(128, 128, kernel_size=3, stride=3)
         )
 
-        self.head = nn.Sequential(
-            nn.Linear(128, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, 128)
-        )
+        self.head = nn.Linear(128, 256)
 
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.classifier(x)
+        x = self.encoder(x)
         x = torch.flatten(x, 1)
+        x = self.head(x)
         x = self.logsoftmax(x)
         return x
 
