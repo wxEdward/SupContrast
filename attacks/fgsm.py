@@ -62,6 +62,8 @@ class RepresentationAdv():
 
                 if self.loss_type == 'mse':
                     loss = F.mse_loss(self.model(x),self.model(target))
+                elif self.loss_type == 'ce':
+                    loss = F.cross_entropy((self.model(x), self.model(target)))
                 elif self.loss_type == 'sim':
                     inputs = torch.cat((x, target))
                     output = self.model(inputs)
@@ -88,6 +90,8 @@ class RepresentationAdv():
 
         if self.loss_type == 'mse':
             loss = F.mse_loss(self.model(x),self.model(target)) * (1.0/batch_size)
+        elif self.loss_type == 'ce':
+            loss = F.cross_entropy(self.model(x), self.model(target)) * (1.0/batch_size)
         elif self.loss_type == 'sim':
             if self.regularize== 'original':
                 inputs = torch.cat((x, original_images))
