@@ -7,7 +7,7 @@ import time
 import math
 import numpy as np
 
-import tensorboard_logger as tb_logger
+# import tensorboard_logger as tb_logger
 import torch
 import torch.backends.cudnn as cudnn
 from torchvision import transforms, datasets
@@ -93,16 +93,16 @@ def parse_option():
     # set the path according to the environment
     if opt.data_folder is None:
         opt.data_folder = './adv_dataset/'
-    opt.model_path = './save/SupCon/{}_models'.format(opt.dataset)
-    opt.tb_path = './save/SupCon/{}_tensorboard'.format(opt.dataset)
+    opt.model_path = './save/SupCon/models'
+    opt.tb_path = './save/SupCon/tensorboard'
 
     iterations = opt.lr_decay_epochs.split(',')
     opt.lr_decay_epochs = list([])
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = '{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'. \
-        format(opt.method, opt.dataset, opt.model, opt.learning_rate,
+    opt.model_name = '{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'. \
+        format(opt.method, opt.model, opt.learning_rate,
                opt.weight_decay, opt.batch_size, opt.temp, opt.trial)
 
     if opt.cosine:
@@ -136,18 +136,19 @@ def parse_option():
 def set_loader(opt, model, device):
     ori_train_X, ori_train_y, _ = load_train_images(device)
     #ori_test_X, ori_test_y, _ = load_test_images(device)
-
+    print(ori_train_X.shape)
     fgsm_train_X = np.load('adv_dataset/fgsm_data_train.npy')
     otsa_train_X = np.load('adv_dataset/otsa_data_train_filtered.npy')
 
     fgsm_train_X = torch.from_numpy(fgsm_train_X).to(device)
     otsa_train_X = torch.from_numpy(otsa_train_X).to(device)
-
+    otsa_train_X = otsa_train_X.unsqueeze(1)
     #augment = TwoCropTransform(train_transform, model, opt)
     #X_train_augmented = augment(X_train_image, train_label, musk_train)
     #X_test_augmented = augment(X_test_image,test_label, musk_test)
-
-    train_data = [[ori_train_X[i], fgsm_train_X[i], otsa_train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
+    
+    train_X = torch.cat([ori_train_X, fgsm_train_X, otsa_train_X],dim=1)
+    train_data = [[train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
     # test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
 
     #normalize = transforms.Normalize(mean=mean, std=std)
@@ -239,7 +240,9 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
     end = time.time()
     for idx, (images, labels) in enumerate(train_loader):
         data_time.update(time.time() - end)
-
+        #print(len(images))
+        #images = torch.tensor(images)
+        #print(images.shape)
         i_1, i_2, i_3 = torch.split(images, [1,1,1], dim=1)
         images = torch.cat([i_1, i_2, i_3], dim=0)
         if torch.cuda.is_available():
@@ -293,18 +296,19 @@ def main():
 
     device = torch.device("cuda")
 
-    
+    log_losses = []
+    log_lr = []
     # build model and criterion
     model, criterion = set_model(opt)
 
     # build data loader
-    train_loader, _ = set_loader(opt, model, device)
+    train_loader = set_loader(opt, model, device)
 
     # build optimizer
     optimizer = set_optimizer(opt, model)
 
     # tensorboard
-    logger = tb_logger.Logger(logdir=opt.tb_folder, flush_secs=2)
+    # logger = tb_logger.Logger(logdir=opt.tb_folder, flush_secs=2)
 
     # training routine
     for epoch in range(1, opt.epochs + 1):
@@ -317,8 +321,10 @@ def main():
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
         # tensorboard logger
-        logger.log_value('loss', loss, epoch)
-        logger.log_value('learning_rate', optimizer.param_groups[0]['lr'], epoch)
+        # logger.log_value('loss', loss, epoch)
+        # logger.log_value('learning_rate', optimizer.param_groups[0]['lr'], epoch)
+        log_losses.append(loss)
+        log_lr.append(optimizer.param_groups[0]['lr'])
 
         if epoch % opt.save_freq == 0:
             save_file = os.path.join(
@@ -329,7 +335,14 @@ def main():
     save_file = os.path.join(
         opt.save_folder, 'last.pth')
     save_model(model, optimizer, opt, opt.epochs, save_file)
+    
+    import pickle
 
+    with open("log/losses","wb") as fp:
+        pickle.dump(log_losses, fp)
+
+    with open("log/lr", "wb") as fp:
+        pickle.dump(log_lr,fp)
 
 if __name__ == '__main__':
     main()
