@@ -66,12 +66,12 @@ from scipy.io import savemat
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('argument for augmentation')
     parser.add_argument('--mode', type=str, default='train',
-                        help='train or test')
+                        help='train or tune or test')
     parser.add_argument('--enc', type=str, default='aconv',
                         help='attacked model')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='batch_size')
-    parser.add_argument('--attack', type=str, default='fgsm', help='attack type')
+    parser.add_argument('--attack', type=str, default='pgd', help='attack type')
 
     arg = parser.parse_args()
     device = torch.device("cuda")
