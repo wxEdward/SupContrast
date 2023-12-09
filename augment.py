@@ -4,10 +4,10 @@ import numpy as np
 from scipy.io import loadmat
 # from main_supcon import set_model
 from attacks.otsa import OTSA
-from attacks.fgsm import RepresentationAdv
+from attacks.fgsm import RepresentationAdv, FastGradientSignUntargeted
 from util import load_train_images, load_test_images
 import torch.backends.cudnn as cudnn
-from networks.resnet_big import SupConResNet
+from networks.resnet_big import SupConResNet,LinearClassifier
 from networks.aconvnet import AConvNet
 from losses import SupConLoss
 # from otsa import OTSA
@@ -41,6 +41,7 @@ class Augmentation():
 def set_augment_model(enc = 'aconv', mode = 'train'):
     model = None
     criterion = None
+    classifier = None
     if  enc == 'aconv':
         model = AConvNet()
     if  enc == 'resnet':
@@ -50,6 +51,7 @@ def set_augment_model(enc = 'aconv', mode = 'train'):
         criterion = SupConLoss(temperature=0.07)
     if mode == 'tune' or 'test':
         criterion = torch.nn.CrossEntropyLoss()
+        classifier = LinearClassifier(enc)
     # enable synchronized Batch Normalization
     #if opt.syncBN:
         #model = apex.parallel.convert_syncbn_model(model)
@@ -57,10 +59,12 @@ def set_augment_model(enc = 'aconv', mode = 'train'):
         if torch.cuda.device_count() > 1:
             model.encoder = torch.nn.DataParallel(model.encoder)
         model = model.cuda()
+        if classifier is not None:
+            classifier = classifier.cuda()
         criterion = criterion.cuda()
         cudnn.benchmark = True
 
-    return model, criterion
+    return model, classifier, criterion
 
 from scipy.io import savemat
 if __name__ == '__main__':
@@ -79,7 +83,7 @@ if __name__ == '__main__':
     batch = arg.batch_size
 
     data_path = 'adv_dataset/' + arg.enc + '_' + arg.attack + '_' + arg.mode + '.npy'
-    model, criterion = set_augment_model(arg.enc, arg.mode)
+    model, classifier, criterion = set_augment_model(arg.enc, arg.mode)
 
     print("Mode: ", arg.mode)
     print("Encoder: ", arg.enc)
@@ -90,50 +94,86 @@ if __name__ == '__main__':
         dataloader = None
         model_params = []
         model_params += model.parameters()
-        attack_1 = RepresentationAdv(model, epsilon=0.0314, alpha=0.007)
+        base_optimizer = optim.SGD(model_params, lr=0.2, momentum=0.9, weight_decay=1e-6)
+        optimizer = LARS(optimizer=base_optimizer, eps=1e-8, trust_coef=0.001)
+        fgsm_data = []
 
         if arg.mode == 'train':
             X_train, y_train, musk_train = load_train_images(device)
             train_data = [[X_train[i], y_train[i]] for i in range(y_train.size()[0])]
             train_dataloader = DataLoader(train_data, batch_size=batch, shuffle=False)
             dataloader = train_dataloader
+            attack_1 = RepresentationAdv(model, epsilon=0.0314, alpha=0.007)
+
+            for idx, (images, labels) in enumerate(dataloader):
+                images = augment(images)
+                print("Batch ", idx)
+                if torch.cuda.is_available():
+                    images[0] = images[0].cuda(non_blocking=True)
+                    images[1] = images[1].cuda(non_blocking=True)
+                    labels = labels.cuda(non_blocking=True)
+                bsz = labels.shape[0]
+                adv_1, _ = attack_1.get_loss(original_images=images[0], target=images[1], optimizer=optimizer,
+                                             weight=256, random_start=True)
+                # print(type(adv_1[0]), adv_1[0].size())
+                # print(adv_1.cpu().numpy())
+                fgsm_data.extend(adv_1.cpu().numpy())
+
+            fgsm_data = np.array(fgsm_data)
+            with open(data_path, 'wb') as f:
+                np.save(f, fgsm_data, allow_pickle=False)
+            # np.save('adv_dataset/fgsm_data_test.npy', fgsm_data, allow_plickle=False)
+            print("Number of perturbed samples: ", len(fgsm_data))
 
         if arg.mode == 'tune':
             X_train, y_train, musk_train = load_train_images(device)
             train_data = [[X_train[i], y_train[i]] for i in range(y_train.size()[0])]
             train_dataloader = DataLoader(train_data, batch_size=batch, shuffle=False)
             dataloader = train_dataloader
-            attack_1.loss_type = 'ce'
+            attack_1 = FastGradientSignUntargeted(model, classifier)
+            for idx, (images, labels) in enumerate(dataloader):
+                images = augment(images)
+                print("Batch ", idx)
+                if torch.cuda.is_available():
+                    images[0] = images[0].cuda(non_blocking=True)
+                    images[1] = images[1].cuda(non_blocking=True)
+                    labels = labels.cuda(non_blocking=True)
+                bsz = labels.shape[0]
+                advinputs = attack_1.perturb(original_images=images[0], labels=labels, random_start=True)
+                # print(type(adv_1[0]), adv_1[0].size())
+                # print(adv_1.cpu().numpy())
+                fgsm_data.extend(advinputs.cpu().numpy())
+
+            fgsm_data = np.array(fgsm_data)
+            with open(data_path, 'wb') as f:
+                np.save(f, fgsm_data, allow_pickle=False)
+            # np.save('adv_dataset/fgsm_data_test.npy', fgsm_data, allow_plickle=False)
+            print("Number of perturbed samples: ", len(fgsm_data))
 
         if arg.mode == 'test':
             X_test, y_test, musk_test = load_test_images(device)
             test_data = [[X_test[i], y_test[i]] for i in range(y_test.size()[0])]
             test_dataloader = DataLoader(test_data, batch_size=batch, shuffle=False)
             dataloader = test_dataloader
-            attack_1.loss_type = 'ce'
+            attack_1 = FastGradientSignUntargeted(model, classifier)
+            for idx, (images, labels) in enumerate(dataloader):
+                images = augment(images)
+                print("Batch ", idx)
+                if torch.cuda.is_available():
+                    images[0] = images[0].cuda(non_blocking=True)
+                    images[1] = images[1].cuda(non_blocking=True)
+                    labels = labels.cuda(non_blocking=True)
+                bsz = labels.shape[0]
+                advinputs = attack_1.perturb(original_images=images[0], labels=labels, random_start=True)
+                # print(type(adv_1[0]), adv_1[0].size())
+                # print(adv_1.cpu().numpy())
+                fgsm_data.extend(advinputs.cpu().numpy())
 
-        base_optimizer = optim.SGD(model_params, lr=0.2, momentum=0.9, weight_decay=1e-6)
-        optimizer = LARS(optimizer=base_optimizer, eps=1e-8, trust_coef=0.001)
-        fgsm_data = []
-        for idx, (images, labels) in enumerate(dataloader):
-            images = augment(images)
-            print("Batch ", idx)
-            if torch.cuda.is_available():
-                images[0] = images[0].cuda(non_blocking=True)
-                images[1] = images[1].cuda(non_blocking=True)
-                labels = labels.cuda(non_blocking=True)
-            bsz = labels.shape[0]
-            adv_1, _ = attack_1.get_loss(original_images=images[0], target=images[1], optimizer=optimizer,
-                                         weight=256, random_start=True)
-            # print(type(adv_1[0]), adv_1[0].size())
-            # print(adv_1.cpu().numpy())
-            fgsm_data.extend(adv_1.cpu().numpy())
-
-        fgsm_data = np.array(fgsm_data)
-        with open(data_path, 'wb') as f:
-            np.save(f, fgsm_data, allow_pickle=False)
-        # np.save('adv_dataset/fgsm_data_test.npy', fgsm_data, allow_plickle=False)
-        print("Number of perturbed samples: ", len(fgsm_data))
+            fgsm_data = np.array(fgsm_data)
+            with open(data_path, 'wb') as f:
+                np.save(f, fgsm_data, allow_pickle=False)
+            # np.save('adv_dataset/fgsm_data_test.npy', fgsm_data, allow_plickle=False)
+            print("Number of perturbed samples: ", len(fgsm_data))
 
     if arg.attack == 'otsa':
 

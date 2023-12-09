@@ -19,6 +19,7 @@ from networks.resnet_big import SupConResNet
 from losses import SupConLoss
 from torch.utils.data import DataLoader
 from util import load_train_images, load_test_images
+from networks.aconvnet import AConvNet
 
 try:
     import apex
@@ -137,8 +138,8 @@ def set_loader(opt, model, device):
     ori_train_X, ori_train_y, _ = load_train_images(device)
     #ori_test_X, ori_test_y, _ = load_test_images(device)
     print(ori_train_X.shape)
-    fgsm_train_X = np.load('adv_dataset/fgsm_data_train.npy')
-    otsa_train_X = np.load('adv_dataset/otsa_data_train_filtered.npy')
+    fgsm_train_X = np.load('adv_dataset/aconv_fgsm_train.npy')
+    otsa_train_X = np.load('adv_dataset/aconv_otsa_train.npy')
 
     fgsm_train_X = torch.from_numpy(fgsm_train_X).to(device)
     otsa_train_X = torch.from_numpy(otsa_train_X).to(device)
@@ -212,7 +213,8 @@ def set_loader(opt):
 
 
 def set_model(opt):
-    model = SupConResNet(name=opt.model)
+    #model = SupConResNet(name=opt.model)
+    model = AConvNet()
     criterion = SupConLoss(temperature=opt.temp)
 
     # enable synchronized Batch Normalization
