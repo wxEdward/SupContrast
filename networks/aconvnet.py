@@ -26,7 +26,9 @@ class AConvNet(nn.Module):
             nn.Conv2d(64, 128, kernel_size=6),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
-            nn.Conv2d(128, 128, kernel_size=3, stride=3)
+            nn.Conv2d(128, 128, kernel_size=3, stride=3),
+            nn.Flatten(1)
+            #x = torch.flatten(x, 1)
         )
 
         self.head = nn.Linear(128, 256)
@@ -35,7 +37,6 @@ class AConvNet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.encoder(x)
-        x = torch.flatten(x, 1)
         x = self.head(x)
         x = self.logsoftmax(x)
         return x

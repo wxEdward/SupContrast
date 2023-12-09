@@ -39,7 +39,7 @@ class Augmentation():
     
 
 def set_augment_model(enc = 'aconv', mode = 'train'):
-    modeli = None
+    model = None
     criterion = None
     if  enc == 'aconv':
         model = AConvNet()
@@ -48,7 +48,7 @@ def set_augment_model(enc = 'aconv', mode = 'train'):
 
     if mode == 'train':
         criterion = SupConLoss(temperature=0.07)
-    if mode == 'test':
+    if mode == 'tune' or 'test':
         criterion = torch.nn.CrossEntropyLoss()
     # enable synchronized Batch Normalization
     #if opt.syncBN:
@@ -72,12 +72,11 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32,
                         help='batch_size')
     parser.add_argument('--attack', type=str, default='fgsm', help='attack type')
-    parser.add_argument('--batch', type=int, default=32, help='batch size')
 
     arg = parser.parse_args()
     device = torch.device("cuda")
     augment = Augmentation()
-    batch = arg.batch
+    batch = arg.batch_size
 
     data_path = 'adv_dataset/' + arg.enc + '_' + arg.attack + '_' + arg.mode + '.npy'
     model, criterion = set_augment_model(arg.enc, arg.mode)
@@ -86,7 +85,7 @@ if __name__ == '__main__':
     print("Encoder: ", arg.enc)
     print("Attack: ", arg.attack)
 
-    if arg.attack == 'fgsm':
+    if arg.attack == 'pgd':
 
         dataloader = None
         model_params = []
@@ -98,6 +97,13 @@ if __name__ == '__main__':
             train_data = [[X_train[i], y_train[i]] for i in range(y_train.size()[0])]
             train_dataloader = DataLoader(train_data, batch_size=batch, shuffle=False)
             dataloader = train_dataloader
+
+        if arg.mode == 'tune':
+            X_train, y_train, musk_train = load_train_images(device)
+            train_data = [[X_train[i], y_train[i]] for i in range(y_train.size()[0])]
+            train_dataloader = DataLoader(train_data, batch_size=batch, shuffle=False)
+            dataloader = train_dataloader
+            attack_1.loss_type = 'ce'
 
         if arg.mode == 'test':
             X_test, y_test, musk_test = load_test_images(device)
@@ -133,7 +139,7 @@ if __name__ == '__main__':
 
         dataloader = None
 
-        if arg.mode == 'train':
+        if arg.mode == 'train' or 'tune':
             X_train, y_train, musk_train = load_train_images(device)
             train_data = [[X_train[i], y_train[i], musk_train[i]] for i in range(y_train.size()[0])]
             dataloader = DataLoader(train_data, batch_size=32, shuffle=False)

@@ -202,7 +202,12 @@ class LinearClassifier(nn.Module):
     """Linear classifier"""
     def __init__(self, name='resnet50', num_classes=10):
         super(LinearClassifier, self).__init__()
-        _, feat_dim = model_dict[name]
+        feat_dim = 0
+        if name == 'resnet50':
+            feat_dim = 2048
+        if name == 'aconv':
+            feat_dim = 256
+        #_, feat_dim = model_dict[name]
         self.fc = nn.Linear(feat_dim, num_classes)
 
     def forward(self, features):
