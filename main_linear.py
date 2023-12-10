@@ -121,7 +121,7 @@ def set_loader(opt, device):
     train_X = torch.cat([ori_train_X, fgsm_tune_X, otsa_tune_X], dim=1)
     train_data = [[train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
 
-    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,
+    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,shuffle=True)
     return train_dataloader, train_dataloader
     # return X_train_image, X_test_image, train_label, test_label #, test_attack_target
 
