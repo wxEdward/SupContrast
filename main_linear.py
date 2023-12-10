@@ -65,15 +65,15 @@ def parse_option():
     opt = parser.parse_args()
 
     # set the path according to the environment
-    opt.data_folder = './datasets/'
+    opt.data_folder = './adv_dataset/'
 
     iterations = opt.lr_decay_epochs.split(',')
     opt.lr_decay_epochs = list([])
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = '{}_{}_lr_{}_decay_{}_bsz_{}'.\
-        format(opt.dataset, opt.model, opt.learning_rate, opt.weight_decay,
+    opt.model_name = '{}_lr_{}_decay_{}_bsz_{}'.\
+        format(opt.model, opt.learning_rate, opt.weight_decay,
                opt.batch_size)
 
     if opt.cosine:
@@ -91,13 +91,8 @@ def parse_option():
         else:
             opt.warmup_to = opt.learning_rate
 
-    if opt.dataset == 'cifar10':
-        opt.n_cls = 10
-    elif opt.dataset == 'cifar100':
-        opt.n_cls = 100
-    else:
-        raise ValueError('dataset not supported: {}'.format(opt.dataset))
-
+    opt.n_cls = 10
+    opt.ckpt  = 'save/SupCon/models/' + opt.ckpt
     return opt
 
 
