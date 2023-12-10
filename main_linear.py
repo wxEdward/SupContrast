@@ -53,7 +53,7 @@ def parse_option():
                         help='momentum')
 
     # model dataset
-    parser.add_argument('--model', type=str, default='resnet50')
+    parser.add_argument('--model', type=str, default='resnet')
     parser.add_argument('--dataset', type=str, default='cifar10',
                         choices=['cifar10', 'cifar100'], help='dataset')
 
@@ -103,7 +103,7 @@ def parse_option():
     return opt
 
 
-def set_loader(opt, model, device):
+def set_loader(opt, device):
     ori_train_X, ori_train_y, _ = load_train_images(device)
     # ori_test_X, ori_test_y, _ = load_test_images(device)
     print(ori_train_X.shape)
@@ -117,20 +117,11 @@ def set_loader(opt, model, device):
     fgsm_tune_X = torch.from_numpy(fgsm_tune_X).to(device)
     otsa_tune_X = torch.from_numpy(otsa_tune_X).to(device)
     otsa_tune_X = otsa_tune_X.unsqueeze(1)
-    # augment = TwoCropTransform(train_transform, model, opt)
-    # X_train_augmented = augment(X_train_image, train_label, musk_train)
-    # X_test_augmented = augment(X_test_image,test_label, musk_test)
 
     train_X = torch.cat([ori_train_X, fgsm_tune_X, otsa_tune_X], dim=1)
     train_data = [[train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
-    # test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
-
-    # normalize = transforms.Normalize(mean=mean, std=std)
 
     train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,
-                                  shuffle=True)
-    # test_dataloader = DataLoader(test_data, batch_size=opt.batch_size,
-    # shuffle=False)
     return train_dataloader, train_dataloader
     # return X_train_image, X_test_image, train_label, test_label #, test_attack_target
 
@@ -276,9 +267,10 @@ def validate(val_loader, model, classifier, criterion, opt):
 def main():
     best_acc = 0
     opt = parse_option()
+    device = torch.device("cuda")
 
     # build data loader
-    train_loader, val_loader = set_loader(opt)
+    train_loader, val_loader = set_loader(opt,device)
 
     # build model and criterion
     model, classifier, criterion = set_model(opt)
