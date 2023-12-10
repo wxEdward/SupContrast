@@ -7,13 +7,17 @@ import math
 
 import torch
 import torch.backends.cudnn as cudnn
+import numpy as np
 
-from main_ce import set_loader
+# from main_ce import set_loader
 from util import AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate, accuracy
 from util import set_optimizer
 from networks.resnet_big import SupConResNet, LinearClassifier
 from networks.aconvnet import  AConvNet
+from util import load_test_images, load_train_images
+from torch.utils.data import DataLoader
+
 
 try:
     import apex
@@ -92,8 +96,43 @@ def parse_option():
             opt.warmup_to = opt.learning_rate
 
     opt.n_cls = 10
-    opt.ckpt  = 'save/SupCon/models/' + opt.ckpt
+    if opt.model == 'resnet':
+        opt.ckpt = 'save/SupCon/models/SupCon_resnet50_lr_0.05_decay_0.0001_bsz_32_temp_0.07_trial_0/' + opt.ckpt
+    if opt.model == 'aconv':
+        opt.ckpt = 'save/SupCon/models/SupCon_aconv_lr_0.05_decay_0.0001_bsz_64_temp_0.07_trial_0' + opt.ckpt
     return opt
+
+
+def set_loader(opt, model, device):
+    ori_train_X, ori_train_y, _ = load_train_images(device)
+    # ori_test_X, ori_test_y, _ = load_test_images(device)
+    print(ori_train_X.shape)
+    if opt.model == 'aconv':
+        fgsm_tune_X = np.load('adv_dataset/aconv_fgsm_train.npy')
+        otsa_tune_X = np.load('adv_dataset/aconv_otsa_train.npy')
+    if opt.model == 'resnet':
+        fgsm_tune_X = np.load('adv_dataset/aconv_fgsm_train.npy')
+        otsa_tune_X = np.load('adv_dataset/aconv_otsa_train.npy')
+
+    fgsm_tune_X = torch.from_numpy(fgsm_tune_X).to(device)
+    otsa_tune_X = torch.from_numpy(otsa_tune_X).to(device)
+    otsa_tune_X = otsa_tune_X.unsqueeze(1)
+    # augment = TwoCropTransform(train_transform, model, opt)
+    # X_train_augmented = augment(X_train_image, train_label, musk_train)
+    # X_test_augmented = augment(X_test_image,test_label, musk_test)
+
+    train_X = torch.cat([ori_train_X, fgsm_tune_X, otsa_tune_X], dim=1)
+    train_data = [[train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
+    # test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
+
+    # normalize = transforms.Normalize(mean=mean, std=std)
+
+    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,
+                                  shuffle=True)
+    # test_dataloader = DataLoader(test_data, batch_size=opt.batch_size,
+    # shuffle=False)
+    return train_dataloader, train_dataloader
+    # return X_train_image, X_test_image, train_label, test_label #, test_attack_target
 
 
 def set_model(opt):
@@ -144,10 +183,14 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
     for idx, (images, labels) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
-        images = images.cuda(non_blocking=True)
-        labels = labels.cuda(non_blocking=True)
+        #print(images.shape)
+        i_1, i_2, i_3 = torch.split(images, [1,1,1], dim=1)
+        images = torch.cat([i_1, i_2, i_3], dim=0)
+        if torch.cuda.is_available():
+            images = images.cuda(non_blocking=True)
+            labels = labels.cuda(non_blocking=True)
+        labels = labels.repeat(3)
         bsz = labels.shape[0]
-
         # warm-up learning rate
         warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
 
@@ -197,10 +240,14 @@ def validate(val_loader, model, classifier, criterion, opt):
     with torch.no_grad():
         end = time.time()
         for idx, (images, labels) in enumerate(val_loader):
-            images = images.float().cuda()
-            labels = labels.cuda()
+            i_1, i_2, i_3 = torch.split(images, [1, 1, 1], dim=1)
+            images = torch.cat([i_1, i_2, i_3], dim=0)
+            if torch.cuda.is_available():
+                images = images.cuda(non_blocking=True)
+                labels = labels.cuda(non_blocking=True)
+            labels = labels.repeat(3)
             bsz = labels.shape[0]
-
+            labels = labels.cuda()
             # forward
             output = classifier(model.encoder(images))
             loss = criterion(output, labels)

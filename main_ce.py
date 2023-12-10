@@ -15,6 +15,7 @@ from util import AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate, accuracy
 from util import set_optimizer, save_model
 from networks.resnet_big import SupCEResNet
+from util import load_train_images,load_test_images
 
 try:
     import apex
@@ -117,52 +118,27 @@ def parse_option():
 
 def set_loader(opt):
     # construct data loader
-    if opt.dataset == 'cifar10':
-        mean = (0.4914, 0.4822, 0.4465)
-        std = (0.2023, 0.1994, 0.2010)
-    elif opt.dataset == 'cifar100':
-        mean = (0.5071, 0.4867, 0.4408)
-        std = (0.2675, 0.2565, 0.2761)
-    else:
-        raise ValueError('dataset not supported: {}'.format(opt.dataset))
-    normalize = transforms.Normalize(mean=mean, std=std)
+    ori_train_X, ori_train_y, _ = load_train_images(device)
+    # ori_test_X, ori_test_y, _ = load_test_images(device)
+    print(ori_train_X.shape)
+    fgsm_train_X = np.load('adv_dataset/aconv_fgsm_train.npy')
+    otsa_train_X = np.load('adv_dataset/aconv_otsa_train.npy')
 
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        normalize,
-    ])
+    fgsm_train_X = torch.from_numpy(fgsm_train_X).to(device)
+    otsa_train_X = torch.from_numpy(otsa_train_X).to(device)
+    otsa_train_X = otsa_train_X.unsqueeze(1)
+    # augment = TwoCropTransform(train_transform, model, opt)
+    # X_train_augmented = augment(X_train_image, train_label, musk_train)
+    # X_test_augmented = augment(X_test_image,test_label, musk_test)
 
-    val_transform = transforms.Compose([
-        transforms.ToTensor(),
-        normalize,
-    ])
+    train_X = torch.cat([ori_train_X, fgsm_train_X, otsa_train_X], dim=1)
+    train_data = [[train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
+    # test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
 
-    if opt.dataset == 'cifar10':
-        train_dataset = datasets.CIFAR10(root=opt.data_folder,
-                                         transform=train_transform,
-                                         download=True)
-        val_dataset = datasets.CIFAR10(root=opt.data_folder,
-                                       train=False,
-                                       transform=val_transform)
-    elif opt.dataset == 'cifar100':
-        train_dataset = datasets.CIFAR100(root=opt.data_folder,
-                                          transform=train_transform,
-                                          download=True)
-        val_dataset = datasets.CIFAR100(root=opt.data_folder,
-                                        train=False,
-                                        transform=val_transform)
-    else:
-        raise ValueError(opt.dataset)
+    # normalize = transforms.Normalize(mean=mean, std=std)
 
-    train_sampler = None
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=opt.batch_size, shuffle=(train_sampler is None),
-        num_workers=opt.num_workers, pin_memory=True, sampler=train_sampler)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=256, shuffle=False,
-        num_workers=8, pin_memory=True)
+    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,
+                                  shuffle=True)
 
     return train_loader, val_loader
 
