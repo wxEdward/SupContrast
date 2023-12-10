@@ -53,7 +53,9 @@ class FastGradientSignUntargeted():
 
         x.requires_grad = True
 
-        self.model.eval()
+        self.model.encoder.eval()
+        self.model.head.eval()
+
         if not self.linear == 'None':
             self.linear.eval()
 
@@ -65,9 +67,9 @@ class FastGradientSignUntargeted():
                     self.linear.zero_grad()
 
                 if self.linear == 'None':
-                    outputs = self.model(x)
+                    outputs = self.model.encoder(x)
                 else:
-                    outputs = self.linear(self.model(x))
+                    outputs = self.linear(self.model.encoder(x))
 
                 loss = F.cross_entropy(outputs, labels, reduction=reduction4loss)
 
