@@ -206,7 +206,7 @@ class LinearClassifier(nn.Module):
         if name == 'resnet':
             feat_dim = 2048
         if name == 'aconv':
-            feat_dim = 256
+            feat_dim = 128
         #_, feat_dim = model_dict[name]
         self.fc = nn.Linear(feat_dim, num_classes)
 

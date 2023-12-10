@@ -182,12 +182,12 @@ if __name__ == '__main__':
         if arg.mode == 'train' or 'tune':
             X_train, y_train, musk_train = load_train_images(device)
             train_data = [[X_train[i], y_train[i], musk_train[i]] for i in range(y_train.size()[0])]
-            dataloader = DataLoader(train_data, batch_size=32, shuffle=False)
+            dataloader = DataLoader(train_data, batch_size=batch, shuffle=False)
 
         if arg.mode == 'test':
             X_test, y_test, musk_test = load_test_images(device)
             test_data = [[X_test[i], y_test[i], musk_test[i]] for i in range(y_test.size()[0])]
-            dataloader = DataLoader(test_data, batch_size=32, shuffle=False)
+            dataloader = DataLoader(test_data, batch_size=batch, shuffle=False)
 
         attack_2 = OTSA(0.07)
         adv_2, adv_2_filtered = attack_2.generate(model, criterion, dataloader, batch=batch, linear = classifier)
