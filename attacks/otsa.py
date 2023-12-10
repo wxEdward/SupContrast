@@ -110,7 +110,7 @@ class OTSA():
     @param n_max: max iterations
     @param S0: initial mean stepsize (e.g., [0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])
     '''
-    def attack(self, model, criterion, device, X_image, y_gt, notation, batch, N, theta_min, theta_max, vth, lambd, lambd_gaussian, n_max, S0):
+    def attack(self, model, criterion, device, X_image, y_gt, notation, batch, N, theta_min, theta_max, vth, lambd, lambd_gaussian, n_max, S0, linear):
         '''
         assert(mag.shape == (2, ))
         print(mag[0], mag[1])
@@ -119,6 +119,7 @@ class OTSA():
         '''
 
         model.eval()
+        linear.eval()
         std = (theta_max - theta_min)/200
         std = np.tile(std.reshape([1,-1]), [N, 1])
         std = torch.from_numpy(std).to(device)
@@ -133,6 +134,7 @@ class OTSA():
         theta_max = torch.from_numpy(theta_max).to(device)
 
         iteration = 0
+        loss_pred = None
 
         x_max = X_image.max().item()
 
@@ -149,14 +151,19 @@ class OTSA():
         X_adv = X_adv[:,None,:,:]
         X_image = X_image[:,None,:,:]
         # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
-        ori_feat = model(X_image)
-        #ori_feat = ori_feat[:,, :]
-        adv_feat = model(X_adv)   # output is of size [batch, 10]
-        # adv_feat = output[:,None,:]
-        ##print(output.size())
-        ori_adv_feat = torch.cat([ori_feat.unsqueeze(1), adv_feat.unsqueeze(1)], dim=1)
-        y_gt_batch = y_gt
-        loss_pred = criterion(ori_adv_feat) 
+        if linear is None:
+            ori_feat = model(X_image)
+            #ori_feat = ori_feat[:,, :]
+            adv_feat = model(X_adv)   # output is of size [batch, 10]
+            # adv_feat = output[:,None,:]
+            ##print(output.size())
+            ori_adv_feat = torch.cat([ori_feat.unsqueeze(1), adv_feat.unsqueeze(1)], dim=1)
+            y_gt_batch = y_gt
+            loss_pred = criterion(ori_adv_feat)
+        else:
+            adv_feat = model.encoder(X_adv)
+            adv_pred = linear(adv_feat)
+            loss_pred = criterion(adv_pred, y_gt)
         loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
         loss = loss_pred + loss_gaussian
         total_loss = torch.sum(loss)  # prepare to backward for the entire batch
@@ -211,11 +218,17 @@ class OTSA():
             X_adv = X_adv[:,None,:,:]
             # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
 
-            adv_feat = model(X_adv)   # output is of size [batch, 10]
-            ##print(output.size())
-            ori_adv_feat = torch.cat([ori_feat.unsqueeze(1), adv_feat.unsqueeze(1)], dim=1)
-            # y_gt_batch = y_gt.repeat(batch)
-            loss_pred = criterion(ori_adv_feat) 
+            if linear is None:
+                adv_feat = model(X_adv)  # output is of size [batch, 10]
+                # adv_feat = output[:,None,:]
+                ##print(output.size())
+                ori_adv_feat = torch.cat([ori_feat.unsqueeze(1), adv_feat.unsqueeze(1)], dim=1)
+                y_gt_batch = y_gt
+                loss_pred = criterion(ori_adv_feat)
+            else:
+                adv_feat = model.encoder(X_adv)
+                adv_pred = linear(adv_feat)
+                loss_pred = criterion(adv_pred, y_gt)
             
             #output_bz = output[None, :, :]
 
@@ -240,13 +253,6 @@ class OTSA():
     
         print(iteration)
         return param
-        """
-        if FLAGS.debug:
-            print(min_param)
-        """
-        
-
-        return max_param
 
     def notation_overlay(self, test_notation):
         overlays = torch.zeros([100, 88, 88])
@@ -297,7 +303,7 @@ class OTSA():
         return img
 
     def generate(self, model, criterion, dataloader, batch=64, N=3, theta_min=np.array([0, 0, 0, -1, 0, 0, -1]), theta_max=np.array([10, 87, 87, 1, 2, 5, 1]), 
-                 vth=0.1, lambd=0.5, lambd_gaussian=1000, n_max=20, S0=np.array([0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01])):
+                 vth=0.1, lambd=0.5, lambd_gaussian=1000, n_max=20, S0=np.array([0.05, 0.5, 0.5, 0, 0.01, 0.025, 0.01]), linear = None):
         #S0 = np.array([0.05, 0.1, 0.1, 0, 0.01, 0.025, 0.01])
 
         surrogate_model = model
@@ -335,7 +341,7 @@ class OTSA():
             # print(notations[0])
             batch = len(notations)
             bsz = batch
-            params = self.attack(surrogate_model,criterion, device, images, labels, notations, batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0)
+            params = self.attack(surrogate_model,criterion, device, images, labels, notations, batch=batch, N=N, theta_min=theta_min, theta_max=theta_max, vth=vth, lambd=lambd, lambd_gaussian=lambd_gaussian, n_max=n_max, S0=S0, linear = linear)
 
             # filter out any scatter if its [x,y] is not on the object
             # allow scatters if partially out of object but with centroid on the object
