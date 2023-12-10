@@ -200,10 +200,10 @@ class SupCEResNet(nn.Module):
 
 class LinearClassifier(nn.Module):
     """Linear classifier"""
-    def __init__(self, name='resnet50', num_classes=10):
+    def __init__(self, name='resnet', num_classes=10):
         super(LinearClassifier, self).__init__()
         feat_dim = 0
-        if name == 'resnet50':
+        if name == 'resnet':
             feat_dim = 2048
         if name == 'aconv':
             feat_dim = 256
