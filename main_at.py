@@ -64,6 +64,8 @@ def parse_option():
                         help='using cosine annealing')
     parser.add_argument('--warm', action='store_true',
                         help='warm-up for large batch training')
+    parser.add_argument('--syncBN', action='store_true',
+                        help='using synchronized batch normalization')
 
     opt = parser.parse_args()
 
