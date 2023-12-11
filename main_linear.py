@@ -190,7 +190,7 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
             features = model.encoder(images)
         output = classifier(features.detach())
         loss = criterion(output, labels)
-
+        print(output.shape, labels.shape)
         # update metric
         losses.update(loss.item(), bsz)
         acc1, acc5 = accuracy(output, labels, topk=(1, 5))
