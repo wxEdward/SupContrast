@@ -6,16 +6,19 @@ import argparse
 import time
 import math
 
-import tensorboard_logger as tb_logger
+# import tensorboard_logger as tb_logger
 import torch
 import torch.backends.cudnn as cudnn
 from torchvision import transforms, datasets
+from torch.utils.data import DataLoader
 
 from util import AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate, accuracy
 from util import set_optimizer, save_model
 from networks.resnet_big import SupCEResNet
 from util import load_train_images,load_test_images
+import numpy as np
+from networks.aconvnet import FullAConvNet
 
 try:
     import apex
@@ -51,7 +54,7 @@ def parse_option():
                         help='momentum')
 
     # model dataset
-    parser.add_argument('--model', type=str, default='resnet50')
+    parser.add_argument('--model', type=str, default='resnet')
     parser.add_argument('--dataset', type=str, default='cifar10',
                         choices=['cifar10', 'cifar100'], help='dataset')
 
@@ -68,17 +71,16 @@ def parse_option():
     opt = parser.parse_args()
 
     # set the path according to the environment
-    opt.data_folder = './datasets/'
-    opt.model_path = './save/SupCon/{}_models'.format(opt.dataset)
-    opt.tb_path = './save/SupCon/{}_tensorboard'.format(opt.dataset)
+    opt.data_folder = './adv_dataset/'
+    opt.model_path = './save/SupCon/models/final'
 
     iterations = opt.lr_decay_epochs.split(',')
     opt.lr_decay_epochs = list([])
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = 'SupCE_{}_{}_lr_{}_decay_{}_bsz_{}_trial_{}'.\
-        format(opt.dataset, opt.model, opt.learning_rate, opt.weight_decay,
+    opt.model_name = 'SupCE_{}_lr_{}_decay_{}_bsz_{}_trial_{}'.\
+        format(opt.model, opt.learning_rate, opt.weight_decay,
                opt.batch_size, opt.trial)
 
     if opt.cosine:
@@ -98,53 +100,44 @@ def parse_option():
         else:
             opt.warmup_to = opt.learning_rate
 
-    opt.tb_folder = os.path.join(opt.tb_path, opt.model_name)
-    if not os.path.isdir(opt.tb_folder):
-        os.makedirs(opt.tb_folder)
-
     opt.save_folder = os.path.join(opt.model_path, opt.model_name)
     if not os.path.isdir(opt.save_folder):
         os.makedirs(opt.save_folder)
 
-    if opt.dataset == 'cifar10':
-        opt.n_cls = 10
-    elif opt.dataset == 'cifar100':
-        opt.n_cls = 100
-    else:
-        raise ValueError('dataset not supported: {}'.format(opt.dataset))
-
     return opt
 
 
-def set_loader(opt):
-    # construct data loader
+def set_loader(opt, device):
     ori_train_X, ori_train_y, _ = load_train_images(device)
-    # ori_test_X, ori_test_y, _ = load_test_images(device)
+    ori_test_X, ori_test_y, _ = load_test_images(device)
     print(ori_train_X.shape)
-    fgsm_train_X = np.load('adv_dataset/aconv_fgsm_train.npy')
-    otsa_train_X = np.load('adv_dataset/aconv_otsa_train.npy')
+    if opt.model == 'aconv':
+        fgsm_test_X = np.load('adv_dataset/aconv_pgd_test.npy')
+        otsa_test_X = np.load('adv_dataset/aconv_otsa_test.npy')
+    if opt.model == 'resnet':
+        fgsm_test_X = np.load('adv_dataset/resnet_pgd_test.npy')
+        otsa_test_X = np.load('adv_dataset/resnet_otsa_test.npy')
 
-    fgsm_train_X = torch.from_numpy(fgsm_train_X).to(device)
-    otsa_train_X = torch.from_numpy(otsa_train_X).to(device)
-    otsa_train_X = otsa_train_X.unsqueeze(1)
-    # augment = TwoCropTransform(train_transform, model, opt)
-    # X_train_augmented = augment(X_train_image, train_label, musk_train)
-    # X_test_augmented = augment(X_test_image,test_label, musk_test)
+    fgsm_test_X = torch.from_numpy(fgsm_test_X).to(device)
+    otsa_test_X = torch.from_numpy(otsa_test_X).to(device)
+    otsa_test_X = otsa_test_X.unsqueeze(1)
 
-    train_X = torch.cat([ori_train_X, fgsm_train_X, otsa_train_X], dim=1)
-    train_data = [[train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
-    # test_data = [[X_test_augmented [i], test_label[i]] for i in range(test_label.size()[0])]
+    train_data = [[ori_train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
+    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True)
 
-    # normalize = transforms.Normalize(mean=mean, std=std)
+    test_X = torch.cat([ori_test_X, fgsm_test_X, otsa_test_X], dim=1)
+    test_data = [[test_X[i], ori_test_y[i]] for i in range(ori_test_y.size()[0])]
+    test_dataloader = DataLoader(test_data, batch_size=opt.batch_size, shuffle=True)
 
-    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,
-                                  shuffle=True)
-
-    return train_loader, val_loader
-
+    return train_dataloader, test_dataloader
 
 def set_model(opt):
-    model = SupCEResNet(name=opt.model, num_classes=opt.n_cls)
+    model = None
+    if opt.model == 'resnet':
+        model = SupCEResNet(name='resnet50')
+    if opt.model == 'aconv':
+        model = FullAConvNet()
+
     criterion = torch.nn.CrossEntropyLoss()
 
     # enable synchronized Batch Normalization
@@ -213,30 +206,59 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
     return losses.avg, top1.avg
 
 
+def update(model, criterion, image, label, losses, top1):
+    bsz = label.shape[0]
+    output = model.encoder(image)
+    loss = criterion(output,label)
+    losses.update(loss.item(), bsz)
+    acc1, acc5 = accuracy(output, label, topk=(1, 5))
+    top1.update(acc1[0], bsz)
+
 def validate(val_loader, model, criterion, opt):
     """validation"""
     model.eval()
-
+    # All
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
+    # TA
+    losses_ta = AverageMeter()
+    top1_ta = AverageMeter()
+    # RA
+    losses_ra = AverageMeter()
+    top1_ra = AverageMeter()
+    # RA - PGD
+    losses_ra_pgd = AverageMeter()
+    top1_ra_pgd = AverageMeter()
+    # RA - OTSA
+    losses_ra_otsa = AverageMeter()
+    top1_ra_otsa = AverageMeter()
 
     with torch.no_grad():
         end = time.time()
         for idx, (images, labels) in enumerate(val_loader):
-            images = images.float().cuda()
+            i_1, i_2, i_3 = torch.split(images, [1, 1, 1], dim=1) # i_1: clean; i_2: PGD; i_3: OTSA
+            i_1 = i_1.cuda(non_blocking=True)
+            i_2 = i_2.cuda(non_blocking=True)
+            i_3 = i_3.cuda(non_blocking=True)
+            images = torch.cat([i_1, i_2, i_3], dim=0)
+            if torch.cuda.is_available():
+                images = images.cuda(non_blocking=True)
+                labels = labels.cuda(non_blocking=True)
             labels = labels.cuda()
-            bsz = labels.shape[0]
-
-            # forward
-            output = model(images)
-            loss = criterion(output, labels)
-
-            # update metric
-            losses.update(loss.item(), bsz)
-            acc1, acc5 = accuracy(output, labels, topk=(1, 5))
-            top1.update(acc1[0], bsz)
-
+            # Compute TA
+            update(model,criterion,i_1,labels,losses_ta,top1_ta)
+            # Compute RA
+            img_ra = torch.cat([i_2,i_3])
+            labels_ra = labels.repeat(2)
+            update(model, criterion, img_ra, labels_ra, losses_ra, top1_ra)
+            # Compute RA - PGD
+            update(model,criterion,i_2,labels,losses_ra_pgd,top1_ra_pgd)
+            # Compute RA - OTSA
+            update(model,criterion,i_3,labels,losses_ra_otsa,top1_ra_otsa)
+            #Compute all
+            labels_cat = labels.repeat(3)
+            update(model,criterion,images,labels_cat, losses, top1)
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
@@ -250,11 +272,15 @@ def validate(val_loader, model, criterion, opt):
                        loss=losses, top1=top1))
 
     print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1))
-    return losses.avg, top1.avg
+    print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1_ta))
+    print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1_ra))
+    print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1_ra_pgd))
+    print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1_ra_otsa))
+    return losses.avg, top1.avg, top1_ta.avg, top1_ra.avg, top1_ra_pgd.avg, top1_ra_otsa.avg
 
 
 def main():
-    best_acc = 0
+    best_acc = best_ta = best_ra = best_ra_pgd = best_ra_otsa = 0
     opt = parse_option()
 
     # build data loader
@@ -266,9 +292,6 @@ def main():
     # build optimizer
     optimizer = set_optimizer(opt, model)
 
-    # tensorboard
-    logger = tb_logger.Logger(logdir=opt.tb_folder, flush_secs=2)
-
     # training routine
     for epoch in range(1, opt.epochs + 1):
         adjust_learning_rate(opt, optimizer, epoch)
@@ -279,15 +302,18 @@ def main():
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
-        # tensorboard logger
-        logger.log_value('train_loss', loss, epoch)
-        logger.log_value('train_acc', train_acc, epoch)
-        logger.log_value('learning_rate', optimizer.param_groups[0]['lr'], epoch)
-
         # evaluation
-        loss, val_acc = validate(val_loader, model, criterion, opt)
-        logger.log_value('val_loss', loss, epoch)
-        logger.log_value('val_acc', val_acc, epoch)
+        loss, val_acc, ta, ra, ra_pgd, ra_otsa = validate(val_loader, model, criterion, opt)
+        if val_acc > best_acc:
+            best_acc = val_acc
+        if ta > best_ta:
+            best_ta = ta
+        if ra > best_ra:
+            best_ra = ra
+        if ra_pgd > best_ra_pgd:
+            best_ra_pgd = ra_pgd
+        if ra_otsa > best_ra_otsa:
+            best_ra_otsa = ra_otsa
 
         if val_acc > best_acc:
             best_acc = val_acc
@@ -296,13 +322,14 @@ def main():
             save_file = os.path.join(
                 opt.save_folder, 'ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
             save_model(model, optimizer, opt, epoch, save_file)
+        print('best accuracy: ', best_acc, best_ta, best_ra, best_ra_pgd, best_ra_otsa)
 
     # save the last model
     save_file = os.path.join(
         opt.save_folder, 'last.pth')
     save_model(model, optimizer, opt, opt.epochs, save_file)
 
-    print('best accuracy: {:.2f}'.format(best_acc))
+    print('best accuracy: ', best_acc, best_ta, best_ra, best_ra_pgd, best_ra_otsa)
 
 
 if __name__ == '__main__':

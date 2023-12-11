@@ -36,6 +36,33 @@ class AConvNet(nn.Module):
         x = self.logsoftmax(x)
         return x
 
+class FullAConvNet(nn.Module):
+    def __init__(self, num_classes: int = 10, dropout: float = 0.5) -> None:
+        super().__init__()
+        #_log_api_usage_once(self)
+        self.classifier = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=5, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(16, 32, kernel_size=5),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=5),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(64, 128, kernel_size=6),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.Conv2d(128, 10, kernel_size=3, stride=3)
+        )
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.classifier(x)
+        x = torch.flatten(x, 1)
+        x = self.logsoftmax(x)
+        return x
+
 def load_checkpoint(device, checkpoint_path):
     torch.manual_seed(0)
     checkpoint = torch.load(checkpoint_path)
