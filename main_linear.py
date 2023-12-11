@@ -239,35 +239,60 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
     return losses.avg, top1.avg
 
 
+def update(model, criterion, classifier, image, label, losses, top1):
+    bsz = label.shape[0]
+    output = classifier(model.encoder(image))
+    loss = criterion(output,label)
+    losses.update(loss.item(), bsz)
+    acc1, acc5 = accuracy(output, label, topk=(1, 5))
+    top1.update(acc1[0], bsz)
+
 def validate(val_loader, model, classifier, criterion, opt):
     """validation"""
     model.eval()
     classifier.eval()
-
+    # All
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
+    # TA
+    losses_ta = AverageMeter()
+    top1_ta = AverageMeter()
+    # RA
+    losses_ra = AverageMeter()
+    top1_ra = AverageMeter()
+    # RA - PGD
+    losses_ra_pgd = AverageMeter()
+    top1_ra_pgd = AverageMeter()
+    # RA - OTSA
+    losses_ra_otsa = AverageMeter()
+    top1_ra_otsa = AverageMeter()
 
     with torch.no_grad():
         end = time.time()
         for idx, (images, labels) in enumerate(val_loader):
-            i_1, i_2, i_3 = torch.split(images, [1, 1, 1], dim=1)
+            i_1, i_2, i_3 = torch.split(images, [1, 1, 1], dim=1) # i_1: clean; i_2: PGD; i_3: OTSA
+            i_1 = i_1.cuda(non_blocking=True)
+            i_2 = i_2.cuda(non_blocking=True)
+            i_3 = i_3.cuda(non_blocking=True)
             images = torch.cat([i_1, i_2, i_3], dim=0)
             if torch.cuda.is_available():
                 images = images.cuda(non_blocking=True)
                 labels = labels.cuda(non_blocking=True)
-            labels = labels.repeat(3)
-            bsz = labels.shape[0]
             labels = labels.cuda()
-            # forward
-            output = classifier(model.encoder(images))
-            loss = criterion(output, labels)
-
-            # update metric
-            losses.update(loss.item(), bsz)
-            acc1, acc5 = accuracy(output, labels, topk=(1, 5))
-            top1.update(acc1[0], bsz)
-
+            # Compute TA
+            update(model,criterion,classifier,i_1,labels,losses_ta,top1_ta)
+            # Compute RA
+            img_ra = torch.cat([i_2,i_3])
+            labels_ra = labels.repeat(2)
+            update(model, criterion, classifier, img_ra, labels_ra, losses_ra, top1_ra)
+            # Compute RA - PGD
+            update(model,criterion,classifier,i_2,labels,losses_ra_pgd,top1_ra_pgd)
+            # Compute RA - OTSA
+            update(model,criterion,classifier,i_3,labels,losses_ra_otsa,top1_ra_otsa)
+            #Compute all
+            labels_cat = labels.repeat(3)
+            update(model,criterion,classifier,images,labels_cat)
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
@@ -281,11 +306,15 @@ def validate(val_loader, model, classifier, criterion, opt):
                        loss=losses, top1=top1))
 
     print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1))
-    return losses.avg, top1.avg
+    print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1_ta))
+    print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1_ra))
+    print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1_ra_pgd))
+    print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1_ra_otsa))
+    return losses.avg, top1.avg, top1_ta.avg, top1_ra.avg, top1_ra_pgd.avg, top1_ra_otsa.avg
 
 
 def main():
-    best_acc = 0
+    best_acc = best_ta = best_ra = best_ra_pgd = best_ra_otsa = 0
     opt = parse_option()
     device = torch.device("cuda")
 
@@ -311,9 +340,17 @@ def main():
             epoch, time2 - time1, acc))
 
         # eval for one epoch
-        loss, val_acc = validate(val_loader, model, classifier, criterion, opt)
+        loss, val_acc, ta, ra, ra_pgd, ra_otsa = validate(val_loader, model, classifier, criterion, opt)
         if val_acc > best_acc:
             best_acc = val_acc
+        if ta > best_ta:
+            best_ta = ta
+        if ra > best_ra:
+            best_ra = ra
+        if ra_pgd > best_ra_pgd:
+            best_ra_pgd = ra_pgd
+        if ra_otsa > best_ra_otsa:
+            best_ra_otsa = ra_otsa
 
         if epoch % opt.save_freq == 0:
             model_save_file = os.path.join(
@@ -323,7 +360,7 @@ def main():
             save_model(model, optimizer, opt, epoch, model_save_file)
             save_model(classifier, optimizer, opt, epoch, linear_save_file)
 
-    print('best accuracy: {:.2f}'.format(best_acc))
+    print('best accuracy', best_acc, ta, ra, ra_pgd, ra_otsa)
 
 
 if __name__ == '__main__':
