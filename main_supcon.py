@@ -298,8 +298,6 @@ def main():
 
     device = torch.device("cuda")
 
-    log_losses = []
-    log_lr = []
     # build model and criterion
     model, criterion = set_model(opt)
 
