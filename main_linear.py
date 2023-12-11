@@ -116,15 +116,15 @@ def set_loader(opt, device):
     ori_test_X, ori_test_y, _ = load_test_images(device)
     print(ori_train_X.shape)
     if opt.model == 'aconv':
-        fgsm_tune_X = np.load('adv_dataset/aconv_fgsm_tune.npy')
+        fgsm_tune_X = np.load('adv_dataset/aconv_pgd_tune.npy')
         otsa_tune_X = np.load('adv_dataset/aconv_otsa_tune.npy')
-        fgsm_test_X = np.load('adv_dataset/aconv_fgsm_test.npy')
+        fgsm_test_X = np.load('adv_dataset/aconv_pgd_test.npy')
         otsa_test_X = np.load('adv_dataset/aconv_otsa_test.npy')
     if opt.model == 'resnet':
-        fgsm_tune_X = np.load('adv_dataset/aconv_fgsm_tune.npy')
-        otsa_tune_X = np.load('adv_dataset/aconv_otsa_tune.npy')
-        fgsm_test_X = np.load('adv_dataset/aconv_fgsm_test.npy')
-        otsa_test_X = np.load('adv_dataset/aconv_otsa_test.npy')
+        fgsm_tune_X = np.load('adv_dataset/resnet_pgd_tune.npy')
+        otsa_tune_X = np.load('adv_dataset/resnet_otsa_tune.npy')
+        fgsm_test_X = np.load('adv_dataset/resnet_pgd_test.npy')
+        otsa_test_X = np.load('adv_dataset/resnet_otsa_test.npy')
 
     fgsm_tune_X = torch.from_numpy(fgsm_tune_X).to(device)
     otsa_tune_X = torch.from_numpy(otsa_tune_X).to(device)
@@ -193,7 +193,7 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
     end = time.time()
     for idx, (images, labels) in enumerate(train_loader):
         data_time.update(time.time() - end)
-
+        #print("Batch ", idx)
         #print(images.shape)
         i_1, i_2, i_3 = torch.split(images, [1,1,1], dim=1)
         images = torch.cat([i_1, i_2, i_3], dim=0)
@@ -210,7 +210,7 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
             features = model.encoder(images)
         output = classifier(features.detach())
         loss = criterion(output, labels)
-        print(output.shape, labels.shape)
+        #print(output.shape, labels.shape)
         # update metric
         losses.update(loss.item(), bsz)
         acc1, acc5 = accuracy(output, labels, topk=(1, 5))
@@ -301,7 +301,7 @@ def main():
     # training routine
     for epoch in range(1, opt.epochs + 1):
         adjust_learning_rate(opt, optimizer, epoch)
-
+        print("Epoch ", epoch)
         # train for one epoch
         time1 = time.time()
         loss, acc = train(train_loader, model, classifier, criterion,
