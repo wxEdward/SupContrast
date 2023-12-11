@@ -4,6 +4,7 @@ import sys
 import argparse
 import time
 import math
+import os
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -17,6 +18,7 @@ from networks.resnet_big import SupConResNet, LinearClassifier
 from networks.aconvnet import  AConvNet
 from util import load_test_images, load_train_images
 from torch.utils.data import DataLoader
+from util import save_model
 
 
 try:
@@ -83,6 +85,12 @@ def parse_option():
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
 
+    opt.model_path = './save/SupCon/models/final'
+    opt.save_folder = os.path.join(opt.model_path, opt.model_name)
+    if not os.path.isdir(opt.save_folder):
+        os.makedirs(opt.save_folder)
+
+
     # warm-up for large-batch training,
     if opt.warm:
         opt.model_name = '{}_warm'.format(opt.model_name)
@@ -105,24 +113,36 @@ def parse_option():
 
 def set_loader(opt, device):
     ori_train_X, ori_train_y, _ = load_train_images(device)
-    # ori_test_X, ori_test_y, _ = load_test_images(device)
+    ori_test_X, ori_test_y, _ = load_test_images(device)
     print(ori_train_X.shape)
     if opt.model == 'aconv':
-        fgsm_tune_X = np.load('adv_dataset/aconv_fgsm_train.npy')
-        otsa_tune_X = np.load('adv_dataset/aconv_otsa_train.npy')
+        fgsm_tune_X = np.load('adv_dataset/aconv_fgsm_tune.npy')
+        otsa_tune_X = np.load('adv_dataset/aconv_otsa_tune.npy')
+        fgsm_test_X = np.load('adv_dataset/aconv_fgsm_test.npy')
+        otsa_test_X = np.load('adv_dataset/aconv_otsa_test.npy')
     if opt.model == 'resnet':
-        fgsm_tune_X = np.load('adv_dataset/aconv_fgsm_train.npy')
-        otsa_tune_X = np.load('adv_dataset/aconv_otsa_train.npy')
+        fgsm_tune_X = np.load('adv_dataset/aconv_fgsm_tune.npy')
+        otsa_tune_X = np.load('adv_dataset/aconv_otsa_tune.npy')
+        fgsm_test_X = np.load('adv_dataset/aconv_fgsm_test.npy')
+        otsa_test_X = np.load('adv_dataset/aconv_otsa_test.npy')
 
     fgsm_tune_X = torch.from_numpy(fgsm_tune_X).to(device)
     otsa_tune_X = torch.from_numpy(otsa_tune_X).to(device)
     otsa_tune_X = otsa_tune_X.unsqueeze(1)
 
-    train_X = torch.cat([ori_train_X, fgsm_tune_X, otsa_tune_X], dim=1)
-    train_data = [[train_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
+    fgsm_test_X = torch.from_numpy(fgsm_test_X).to(device)
+    otsa_test_X = torch.from_numpy(otsa_test_X).to(device)
+    otsa_test_X = otsa_test_X.unsqueeze(1)
 
-    train_dataloader = DataLoader(train_data, batch_size=opt.batch_size,shuffle=True)
-    return train_dataloader, train_dataloader
+    tune_X = torch.cat([ori_train_X, fgsm_tune_X, otsa_tune_X], dim=1)
+    tune_data = [[tune_X[i], ori_train_y[i]] for i in range(ori_train_y.size()[0])]
+    tune_dataloader = DataLoader(tune_data, batch_size=opt.batch_size, shuffle=True)
+
+    test_X = torch.cat([ori_test_X, fgsm_test_X, otsa_test_X], dim=1)
+    test_data = [[test_X[i], ori_test_y[i]] for i in range(ori_test_y.size()[0])]
+    test_dataloader = DataLoader(test_data, batch_size=opt.batch_size, shuffle=True)
+
+    return tune_dataloader, test_dataloader
     # return X_train_image, X_test_image, train_label, test_label #, test_attack_target
 
 
@@ -162,7 +182,7 @@ def set_model(opt):
 
 def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
     """one epoch training"""
-    model.eval()
+    model.train()
     classifier.train()
 
     batch_time = AverageMeter()
@@ -294,6 +314,14 @@ def main():
         loss, val_acc = validate(val_loader, model, classifier, criterion, opt)
         if val_acc > best_acc:
             best_acc = val_acc
+
+        if epoch % opt.save_freq == 0:
+            model_save_file = os.path.join(
+                opt.save_folder, 'model_ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
+            linear_save_file = os.path.join(
+                opt.save_folder, 'linear_ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
+            save_model(model, optimizer, opt, epoch, model_save_file)
+            save_model(classifier, optimizer, opt, epoch, linear_save_file)
 
     print('best accuracy: {:.2f}'.format(best_acc))
 
