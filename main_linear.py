@@ -106,7 +106,7 @@ def parse_option():
     if opt.model == 'resnet':
         opt.ckpt = 'save/SupCon/models/SupCon_resnet50_lr_0.05_decay_0.0001_bsz_32_temp_0.07_trial_0/' + opt.ckpt
     if opt.model == 'aconv':
-        opt.ckpt = 'save/SupCon/models/SupCon_aconv_lr_0.05_decay_0.0001_bsz_64_temp_0.07_trial_0' + opt.ckpt
+        opt.ckpt = 'save/SupCon/models/SupCon_aconv_lr_0.05_decay_0.0001_bsz_64_temp_0.07_trial_0/' + opt.ckpt
     return opt
 
 
@@ -181,7 +181,7 @@ def set_model(opt):
 
 def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
     """one epoch training"""
-    model.train()
+    model.eval()
     classifier.train()
 
     batch_time = AverageMeter()

@@ -276,7 +276,7 @@ def validate(val_loader, model, classifier, criterion, opt):
             update(model,criterion,classifier,i_3,labels,losses_ra_otsa,top1_ra_otsa)
             #Compute all
             labels_cat = labels.repeat(3)
-            update(model,criterion,classifier,images,labels_cat)
+            update(model,criterion,classifier,images,labels_cat,losses, top1)
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()

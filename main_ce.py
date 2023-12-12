@@ -208,7 +208,7 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
 
 def update(model, criterion, image, label, losses, top1):
     bsz = label.shape[0]
-    output = model.encoder(image)
+    output = model(image)
     loss = criterion(output,label)
     losses.update(loss.item(), bsz)
     acc1, acc5 = accuracy(output, label, topk=(1, 5))
@@ -280,11 +280,12 @@ def validate(val_loader, model, criterion, opt):
 
 
 def main():
+    device = torch.device("cuda")
     best_acc = best_ta = best_ra = best_ra_pgd = best_ra_otsa = 0
     opt = parse_option()
 
     # build data loader
-    train_loader, val_loader = set_loader(opt)
+    train_loader, val_loader = set_loader(opt,device)
 
     # build model and criterion
     model, criterion = set_model(opt)
