@@ -200,7 +200,7 @@ if __name__ == '__main__':
             dataloader = DataLoader(test_data, batch_size=batch, shuffle=False)
 
         attack_2 = OTSA(0.07)
-        adv_2, adv_2_filtered = attack_2.generate(model, criterion, dataloader, batch=batch, linear = classifier)
+        adv_2, adv_2_filtered = attack_2.generate(model, criterion, dataloader, batch=batch, linear = 'None')
 
         with open(data_path, 'wb') as f:
             np.save(f, adv_2_filtered, allow_pickle=False)
