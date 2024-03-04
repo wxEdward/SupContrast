@@ -51,7 +51,7 @@ def set_augment_model(enc = 'aconv', mode = 'train'):
         criterion = SupConLoss(temperature=0.07)
     if mode == 'tune' or 'test':
         criterion = torch.nn.CrossEntropyLoss()
-        classifier = LinearClassifier(enc)
+        # classifier = LinearClassifier(enc)
     # enable synchronized Batch Normalization
     #if opt.syncBN:
         #model = apex.parallel.convert_syncbn_model(model)
@@ -64,17 +64,17 @@ def set_augment_model(enc = 'aconv', mode = 'train'):
             model = torch.nn.DataParallel(model)
 
     model.load_state_dict(torch.load('save/SupCon/models/final/SupCE_resnet_lr_0.2_decay_0.0001_bsz_64_trial_0/ckpt_epoch_30.pth')['model'])
-
+    classifier = None
     if torch.cuda.is_available():
-        if torch.cuda.device_count() > 1:
-            model.encoder = torch.nn.DataParallel(model.encoder)
+        #if torch.cuda.device_count() > 1:
+           # model.encoder = torch.nn.DataParallel(model.encoder)
         model = model.cuda()
         if classifier is not None:
             classifier = classifier.cuda()
         criterion = criterion.cuda()
         cudnn.benchmark = True
 
-    return model, classifier, criterion
+    return model, None, criterion
 
 from scipy.io import savemat
 if __name__ == '__main__':
@@ -165,7 +165,7 @@ if __name__ == '__main__':
             test_data = [[X_test[i], y_test[i]] for i in range(y_test.size()[0])]
             test_dataloader = DataLoader(test_data, batch_size=batch, shuffle=False)
             dataloader = test_dataloader
-            attack_1 = FastGradientSignUntargeted(model, classifier)
+            attack_1 = FastGradientSignUntargeted(model)
             for idx, (images, labels) in enumerate(dataloader):
                 images = augment(images)
                 print("Batch ", idx)

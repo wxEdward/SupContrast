@@ -21,7 +21,7 @@ class FastGradientSignUntargeted():
         with iterative grad sign updates
     """
 
-    def __init__(self, model, linear, epsilon=0.0314, alpha=0.007, min_val = 0.0, max_val=1.0, max_iters=7, _type='linf'):
+    def __init__(self, model, linear='None', epsilon=0.0314, alpha=0.007, min_val = 0.0, max_val=1.0, max_iters=7, _type='linf'):
 
         # Model
         self.model = model
