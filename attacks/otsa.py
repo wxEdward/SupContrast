@@ -222,7 +222,7 @@ class OTSA():
             X_adv = X_adv.float()
             X_adv = X_adv[:,None,:,:]
             # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
-
+            '''
             if linear is None:
                 adv_feat = model(X_adv)  # output is of size [batch, 10]
                 # adv_feat = output[:,None,:]
@@ -234,7 +234,9 @@ class OTSA():
                 adv_feat = model.encoder(X_adv)
                 adv_pred = linear(adv_feat)
                 loss_pred = criterion(adv_pred, y_gt)
-            
+            '''
+            adv_pred = model(X_adv)
+            loss_pred = criterion(adv_pred, y_gt)
             #output_bz = output[None, :, :]
 
             # Since not all param are updated, we compute the loss again to make sure the loss is aligned with the param
