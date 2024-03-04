@@ -53,8 +53,9 @@ class FastGradientSignUntargeted():
 
         x.requires_grad = True
 
-        self.model.encoder.eval()
-        self.model.head.eval()
+        # self.model.encoder.eval()
+        # self.model.head.eval()
+        self.model.eval()
 
         if not self.linear == 'None':
             self.linear.eval()
@@ -67,7 +68,7 @@ class FastGradientSignUntargeted():
                     self.linear.zero_grad()
 
                 if self.linear == 'None':
-                    outputs = self.model.encoder(x)
+                    outputs = self.model(x)
                 else:
                     outputs = self.linear(self.model.encoder(x))
 

@@ -7,7 +7,7 @@ from attacks.otsa import OTSA
 from attacks.fgsm import RepresentationAdv, FastGradientSignUntargeted
 from util import load_train_images, load_test_images
 import torch.backends.cudnn as cudnn
-from networks.resnet_big import SupConResNet,LinearClassifier
+from networks.resnet_big import SupConResNet, LinearClassifier, SupCEResNet
 from networks.aconvnet import AConvNet
 from losses import SupConLoss
 # from otsa import OTSA
@@ -55,6 +55,11 @@ def set_augment_model(enc = 'aconv', mode = 'train'):
     # enable synchronized Batch Normalization
     #if opt.syncBN:
         #model = apex.parallel.convert_syncbn_model(model)
+    model = SupCEResNet()
+    model.load_state_dict(torch.load('/save/SupCon/models/final/SupCE_resnet_lr_0.2_decay_0.0001_bsz_64_trial_0/ckpt_epoch_30.pth'))
+    model.eval()
+    classifier = None
+
     if torch.cuda.is_available():
         if torch.cuda.device_count() > 1:
             model.encoder = torch.nn.DataParallel(model.encoder)
