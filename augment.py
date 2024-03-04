@@ -88,7 +88,7 @@ if __name__ == '__main__':
     augment = Augmentation()
     batch = arg.batch_size
 
-    data_path = 'adv_dataset/' + arg.enc + '_' + arg.attack + '_' + arg.mode + '.npy'
+    data_path = 'adv_dataset_ce/' + arg.enc + '_' + arg.attack + '_' + arg.mode + '.npy'
     model, classifier, criterion = set_augment_model(arg.enc, arg.mode)
 
     print("Mode: ", arg.mode)
