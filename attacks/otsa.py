@@ -151,7 +151,8 @@ class OTSA():
         X_adv = X_adv[:,None,:,:]
         X_image = X_image[:,None,:,:]
         # print(X_adv.size())# X_adv resized to [batch, 1, 88, 88]
-        if linear is None:
+        '''
+                if linear is None:
             ori_feat = model(X_image)
             #ori_feat = ori_feat[:,, :]
             adv_feat = model(X_adv)   # output is of size [batch, 10]
@@ -164,6 +165,10 @@ class OTSA():
             adv_feat = model.encoder(X_adv)
             adv_pred = linear(adv_feat)
             loss_pred = criterion(adv_pred, y_gt)
+        '''
+        adv_pred  = model(X_adv)
+        loss_pred = criterion(adv_pred, y_gt)
+
         loss_gaussian = lambd_gaussian * self.gaussian(param, notation, batch, N, device)
         loss = loss_pred + loss_gaussian
         total_loss = torch.sum(loss)  # prepare to backward for the entire batch
