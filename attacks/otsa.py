@@ -119,7 +119,7 @@ class OTSA():
         '''
 
         model.eval()
-        linear.eval()
+        # linear.eval()
         std = (theta_max - theta_min)/200
         std = np.tile(std.reshape([1,-1]), [N, 1])
         std = torch.from_numpy(std).to(device)
