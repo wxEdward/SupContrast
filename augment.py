@@ -56,7 +56,14 @@ def set_augment_model(enc = 'aconv', mode = 'train'):
     #if opt.syncBN:
         #model = apex.parallel.convert_syncbn_model(model)
     model = SupCEResNet()
-    model.load_state_dict(torch.load('/save/SupCon/models/final/SupCE_resnet_lr_0.2_decay_0.0001_bsz_64_trial_0/ckpt_epoch_30.pth'))
+    #if opt.syncBN:
+        #model = apex.parallel.convert_syncbn_model(model)
+
+    if torch.cuda.is_available():
+        if torch.cuda.device_count() > 1:
+            model = torch.nn.DataParallel(model)
+
+    model.load_state_dict(torch.load('save/SupCon/models/final/SupCE_resnet_lr_0.2_decay_0.0001_bsz_64_trial_0/ckpt_epoch_30.pth')['model'])
 
     model = model.encoder
     classifier = model.fc
