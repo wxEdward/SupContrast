@@ -112,11 +112,11 @@ def set_loader(opt, device):
     ori_test_X, ori_test_y, _ = load_test_images(device)
     print(ori_train_X.shape)
     if opt.model == 'aconv':
-        fgsm_test_X = np.load('adv_dataset/aconv_pgd_test.npy')
-        otsa_test_X = np.load('adv_dataset/aconv_otsa_test.npy')
+        fgsm_test_X = np.load('adv_dataset_ce/aconv_pgd_test.npy')
+        otsa_test_X = np.load('adv_dataset_ce/aconv_otsa_test.npy')
     if opt.model == 'resnet':
-        fgsm_test_X = np.load('adv_dataset/resnet_pgd_test.npy')
-        otsa_test_X = np.load('adv_dataset/resnet_otsa_test.npy')
+        fgsm_test_X = np.load('adv_dataset_ce/resnet_pgd_test.npy')
+        otsa_test_X = np.load('adv_dataset_ce/resnet_otsa_test.npy')
 
     fgsm_test_X = torch.from_numpy(fgsm_test_X).to(device)
     otsa_test_X = torch.from_numpy(otsa_test_X).to(device)
@@ -138,15 +138,23 @@ def set_model(opt):
     if opt.model == 'aconv':
         model = FullAConvNet()
 
+    model = SupCEResNet()
+    if torch.cuda.is_available():
+        if torch.cuda.device_count() > 1:
+            model = torch.nn.DataParallel(model)
+
+    model.load_state_dict(torch.load('save/SupCon/models/final/SupCE_resnet_lr_0.2_decay_0.0001_bsz_64_trial_0/ckpt_epoch_30.pth')['model'])
+
     criterion = torch.nn.CrossEntropyLoss()
+    '''
 
     # enable synchronized Batch Normalization
     if opt.syncBN:
         model = apex.parallel.convert_syncbn_model(model)
-
+    '''
     if torch.cuda.is_available():
-        if torch.cuda.device_count() > 1:
-            model = torch.nn.DataParallel(model)
+        # if torch.cuda.device_count() > 1:
+            # model = torch.nn.DataParallel(model)
         model = model.cuda()
         criterion = criterion.cuda()
         cudnn.benchmark = True
@@ -293,7 +301,8 @@ def main():
     # build optimizer
     optimizer = set_optimizer(opt, model)
 
-    # training routine
+    '''
+        # training routine
     for epoch in range(1, opt.epochs + 1):
         adjust_learning_rate(opt, optimizer, epoch)
 
@@ -331,6 +340,25 @@ def main():
     save_model(model, optimizer, opt, opt.epochs, save_file)
 
     print('best accuracy: ', best_acc, best_ta, best_ra, best_ra_pgd, best_ra_otsa)
+    '''
+    # evaluation
+    loss, val_acc, ta, ra, ra_pgd, ra_otsa = validate(val_loader, model, criterion, opt)
+    if val_acc > best_acc:
+        best_acc = val_acc
+    if ta > best_ta:
+        best_ta = ta
+    if ra > best_ra:
+        best_ra = ra
+    if ra_pgd > best_ra_pgd:
+        best_ra_pgd = ra_pgd
+    if ra_otsa > best_ra_otsa:
+        best_ra_otsa = ra_otsa
+
+    if val_acc > best_acc:
+        best_acc = val_acc
+
+    print('best accuracy: ', best_acc, best_ta, best_ra, best_ra_pgd, best_ra_otsa)
+
 
 
 if __name__ == '__main__':
